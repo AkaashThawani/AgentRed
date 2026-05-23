@@ -2,7 +2,10 @@
 
 Status: **v1 — locked for hackathon MVP**. Ping backend if you need a field added.
 
-Base URL (local dev): `http://localhost:8000`
+**Base URL (production):** `https://agentred.onrender.com`
+**Base URL (local dev):** `http://localhost:8000`
+
+CORS is wide-open (`*`) so you can hit production directly from any dev origin or Vercel preview.
 
 ---
 
@@ -248,13 +251,13 @@ and point AgentRed at `http://localhost:8001` — see [honeypot/README.md](honey
 
 ### Browser (EventSource)
 ```ts
-const { scan_id, stream_url } = await fetch("http://localhost:8000/scan", {
+const { scan_id, stream_url } = await fetch("https://agentred.onrender.com/scan", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ target_url: targetUrl }),
 }).then(r => r.json());
 
-const es = new EventSource(`http://localhost:8000${stream_url}`);
+const es = new EventSource(`https://agentred.onrender.com${stream_url}`);
 
 es.addEventListener("scan_started", e => { /* ... */ });
 es.addEventListener("card_fetched", e => {
@@ -291,7 +294,7 @@ es.addEventListener("error", e => {
 ### Fetching the cached report later
 If the user reloads, the SSE stream is gone, but the final report is cached:
 ```ts
-const report = await fetch(`http://localhost:8000/report/${scan_id}`).then(r => r.json());
+const report = await fetch(`https://agentred.onrender.com/report/${scan_id}`).then(r => r.json());
 ```
 
 ---
