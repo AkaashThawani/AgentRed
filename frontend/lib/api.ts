@@ -1,6 +1,7 @@
 import { Report } from './types'
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || 'https://agentred.onrender.com'
 
 export async function checkHealth(): Promise<boolean> {
   try {
@@ -11,11 +12,21 @@ export async function checkHealth(): Promise<boolean> {
   }
 }
 
-export async function startScan(targetUrl: string): Promise<{ scan_id: string; stream_url: string }> {
+export async function startScan(
+  targetUrl: string,
+  authHeaders?: Record<string, string>
+): Promise<{ scan_id: string; stream_url: string }> {
+  // Build request body — only include auth_headers when the caller provides them
+  const body: Record<string, unknown> = { target_url: targetUrl }
+  if (authHeaders && Object.keys(authHeaders).length > 0) {
+    body.auth_headers = authHeaders
+    // Never log auth header values
+  }
+
   const response = await fetch(`${API_BASE_URL}/scan`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target_url: targetUrl }),
+    body: JSON.stringify(body),
   })
 
   if (!response.ok) {
@@ -49,8 +60,6 @@ export function openScanStream(
   onError: (error: Error) => void
 ): EventSource {
   const eventSource = new EventSource(streamUrl)
-  // Track whether the scan completed normally so we can ignore the
-  // onerror that fires when the server closes the connection after report.
   let completed = false
 
   const makeHandler = (eventType: string) => (event: MessageEvent) => {
@@ -61,12 +70,12 @@ export function openScanStream(
     }
   }
 
-  eventSource.addEventListener('scan_started', makeHandler('scan_started'))
-  eventSource.addEventListener('card_fetched', makeHandler('card_fetched'))
-  eventSource.addEventListener('phase', makeHandler('phase'))
-  eventSource.addEventListener('finding', makeHandler('finding'))
+  eventSource.addEventListener('scan_started',   makeHandler('scan_started'))
+  eventSource.addEventListener('card_fetched',   makeHandler('card_fetched'))
+  eventSource.addEventListener('phase',          makeHandler('phase'))
+  eventSource.addEventListener('finding',        makeHandler('finding'))
   eventSource.addEventListener('test_generated', makeHandler('test_generated'))
-  eventSource.addEventListener('test_running', makeHandler('test_running'))
+  eventSource.addEventListener('test_running',   makeHandler('test_running'))
   eventSource.addEventListener('adaptive_followup', makeHandler('adaptive_followup'))
 
   eventSource.addEventListener('report', (event: MessageEvent) => {
@@ -79,8 +88,7 @@ export function openScanStream(
     eventSource.close()
   })
 
-  // Backend "error" SSE event (named, with JSON payload). Distinct from EventSource's
-  // built-in transport error which has no data and fires on close/network failure.
+  // Named SSE error event from the backend (event: error\ndata: {...})
   eventSource.addEventListener('error', (event: MessageEvent) => {
     if (event.data) {
       completed = true
@@ -93,9 +101,7 @@ export function openScanStream(
     }
   })
 
-  // Network / connection-level error — ignore if scan already completed normally.
-  // EventSource also fires onerror when the server closes the stream after sending
-  // the final report, so we must not treat that as a failure.
+  // Transport-level error — ignore when scan already completed normally
   eventSource.onerror = () => {
     if (!completed) {
       onError(new Error('Stream connection failed'))
@@ -112,7 +118,7 @@ export async function downloadReportJson(report: Report): Promise<void> {
     'href',
     'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(report, null, 2))
   )
-  element.setAttribute('download', `report-${Date.now()}.json`)
+  element.setAttribute('download', `agentred-report-${report.scan_id ?? Date.now()}.json`)
   element.style.display = 'none'
   document.body.appendChild(element)
   element.click()
@@ -120,27 +126,34 @@ export async function downloadReportJson(report: Report): Promise<void> {
 }
 
 export async function copyReportSummary(report: Report): Promise<void> {
-  const summary = `
-Agent Scanner Report
-====================
-Agent: ${report.agent_name}
-Trust Score: ${report.trust_score}/100 (${report.grade})
-URL: ${report.target_url}
+  const durationMs = report.duration_ms ?? report.stats?.duration
+  const durationStr = durationMs ? `${(durationMs / 1000).toFixed(1)}s` : 'N/A'
 
-Summary: ${report.summary || 'No summary available'}
+  const summary = `
+AgentRed Scan Report
+====================
+Agent:       ${report.agent_name}
+Trust Score: ${report.trust_score}/100 (${report.grade})
+URL:         ${report.target_url}
+Scan ID:     ${report.scan_id ?? 'N/A'}
+
+Summary: ${report.summary ?? 'No summary available'}
 
 Stats:
-- Total Tests: ${report.stats?.total_tests || 0}
-- Passed: ${report.stats?.passed || 0}
-- Failed: ${report.stats?.failed || 0}
-- Critical: ${report.stats?.critical || 0}
-- High: ${report.stats?.high || 0}
-- Duration: ${report.stats?.duration || 'N/A'}ms
+  Total Tests:      ${report.stats?.total_tests ?? 0}
+  Passed:           ${report.stats?.passed ?? 0}
+  Failed:           ${report.stats?.failed ?? 0}
+  Static Findings:  ${report.stats?.static_findings ?? 0}
+  Critical:         ${report.stats?.critical ?? 0}
+  High:             ${report.stats?.high ?? 0}
+  Medium:           ${report.stats?.medium ?? 0}
+  Low:              ${report.stats?.low ?? 0}
+  Duration:         ${durationStr}
   `.trim()
 
   try {
     await navigator.clipboard.writeText(summary)
   } catch {
-    console.error('Failed to copy summary')
+    console.error('Failed to copy report summary')
   }
 }

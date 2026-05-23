@@ -26,6 +26,8 @@ export interface AgentCard {
   security_schemes?: Record<string, unknown>
   capabilities?: Capability
   skills?: Skill[]
+  /** Cryptographic signature — absence indicates unsigned card */
+  signature?: string
 }
 
 export interface Finding {
@@ -57,21 +59,32 @@ export interface TestCase {
 }
 
 export interface Report {
+  /** Scan identifier returned by the backend */
+  scan_id?: string
   target_url: string
   agent_name: string
   trust_score: number
   grade: 'TRUSTED' | 'CAUTION' | 'RISKY' | 'DANGEROUS'
   summary?: string
+  /** Agent card as fetched during the scan */
+  card?: AgentCard
   stats?: {
     total_tests: number
     passed: number
     failed: number
+    /** Findings from static (non-behavioural) analysis */
+    static_findings?: number
     critical: number
     high: number
     medium: number
     low: number
+    /** Legacy — duration in ms, some backends put it here */
     duration?: number
   }
+  /** Scan duration in milliseconds (top-level, preferred) */
+  duration_ms?: number
+  /** ISO timestamp of when the report was generated */
+  ts?: string
   findings?: Finding[]
 }
 
@@ -100,6 +113,8 @@ export interface CardFetchedEvent {
 export interface PhaseEvent {
   type: 'phase'
   phase: ScanPhase
+  /** Optional human-readable description sent by the backend */
+  message?: string
   timestamp: number
 }
 
