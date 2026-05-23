@@ -43,8 +43,32 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
     agent_name = target_url
     endpoint: str | None = None
 
+    # Per-scan dedupe: once we've proven a class of vulnerability (canary echo, etc.) the
+    # second/third detection is the same bug — we downgrade later hits to LOW informational
+    # so the report doesn't spam 8 nearly-identical CRITICALs.
+    seen_canary_echo = False
+
     async def emit_finding(f: Finding) -> None:
-        """Single funnel: enrich (OWASP + reproducer), append, emit, store."""
+        """Single funnel: enrich, dedupe canary echoes, append, emit, store."""
+        nonlocal seen_canary_echo
+        # Canary-echo dedupe — first hit is the proof; later hits are corroboration.
+        is_canary_echo = (
+            f.test_type == "canary_exfiltration"
+            and not f.passed
+            and (f.evidence and (f.evidence.highlight or "").startswith("CANARY_"))
+        )
+        if is_canary_echo:
+            if seen_canary_echo:
+                f.severity = Severity.LOW
+                f.passed = True   # treat as informational corroboration, doesn't deduct again
+                f.title = "Canary echoed again (same uncontrolled-output bug)"
+                f.description = (
+                    "Same agent echoed the canary in a second test. This is the same underlying "
+                    "vulnerability already flagged above — recorded for evidence."
+                )
+            else:
+                seen_canary_echo = True
+
         enrich_finding(f, endpoint=endpoint, auth_headers=auth_headers)
         all_findings.append(f)
         await bus.emit("finding", finding=f.model_dump(mode="json"))
@@ -209,7 +233,13 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
                 blocked_status_count[status or 0] = blocked_status_count.get(status or 0, 0) + 1
                 continue
             await emit_finding(finding)
-            if not finding.passed and finding.severity in _TRIGGER_SEVERITIES:
+            if (
+                not finding.passed
+                and finding.severity in _TRIGGER_SEVERITIES
+                # Canary echoes are self-evident. Adaptive variants would just keep echoing
+                # and stack more critical findings without new information.
+                and finding.test_type != "canary_exfiltration"
+            ):
                 triggered_pairs.append((finding, t, finding.evidence.response or ""))
 
         blocked_total = sum(blocked_status_count.values())

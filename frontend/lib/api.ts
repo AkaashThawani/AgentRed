@@ -1,11 +1,16 @@
 import { Report } from './types'
 
-// Route everything through Vercel's same-origin `/api/*` proxy (configured in next.config.mjs)
-// so the browser never sees render.com. Ad blockers (uBlock Origin, Brave Shields, corporate
-// DNS filters, etc.) commonly block onrender.com outright, which surfaced as
-// `net::ERR_BLOCKED_BY_CLIENT` in production. Same-origin requests are immune to that.
-// In `next dev` the rewrite forwards `/api/*` to the BACKEND env var (or localhost:8000).
+// Short-lived REST calls (health/scan/history/report) go through Vercel's `/api/*` rewrite
+// — same-origin, so ad blockers can't block them.
+//
+// Long-lived SSE streams must hit the backend DIRECTLY. Vercel's Hobby-tier rewrites have a
+// 10s response timeout, which kills scans that run 30-60s. We accept that judges with
+// aggressive ad blockers may need to whitelist the stream URL once.
 export const API_BASE_URL = '/api'
+export const STREAM_BASE_URL =
+  process.env.NEXT_PUBLIC_STREAM_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  'http://localhost:8000'
 
 export async function checkHealth(): Promise<boolean> {
   try {
@@ -47,7 +52,8 @@ export async function startScan(
 
 export function buildStreamUrl(streamUrl: string): string {
   if (!streamUrl) return ''
-  return streamUrl.startsWith('/') ? `${API_BASE_URL}${streamUrl}` : streamUrl
+  // SSE must use the direct backend URL (NOT the Vercel rewrite — which has a 10s timeout).
+  return streamUrl.startsWith('/') ? `${STREAM_BASE_URL}${streamUrl}` : streamUrl
 }
 
 /** Historical scans from ClickHouse. Returns [] if ClickHouse not configured. */
