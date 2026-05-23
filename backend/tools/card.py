@@ -48,19 +48,53 @@ async def fetch_agent_card(url: str) -> dict[str, Any]:
             try:
                 resp = await client.get(card_url, headers={"Accept": "application/json"})
                 if resp.status_code == 404:
-                    last_err = httpx.HTTPStatusError(
-                        f"404 Not Found for {card_url}", request=resp.request, response=resp,
-                    )
+                    last_err = ValueError(f"404 Not Found at {card_url}")
                     continue
                 resp.raise_for_status()
-                card = resp.json()
-                if not isinstance(card, dict):
-                    last_err = ValueError(f"Agent card at {card_url} is not a JSON object")
+                try:
+                    card = resp.json()
+                except ValueError:
+                    last_err = ValueError(
+                        f"{card_url} returned non-JSON content "
+                        f"(content-type={resp.headers.get('content-type')!r}). "
+                        "This URL does not appear to host an A2A agent card."
+                    )
+                    continue
+                if not _looks_like_agent_card(card):
+                    last_err = ValueError(
+                        f"{card_url} returned JSON, but it does not look like an A2A agent card "
+                        "(missing required fields such as `name` and `url`/`skills`)."
+                    )
                     continue
                 card["_meta"] = {"fetched_from": card_url, "origin": origin}
                 return card
-            except (httpx.HTTPError, ValueError) as e:
+            except httpx.ConnectError as e:
+                raise ValueError(
+                    f"Could not connect to {origin}. Check the URL is correct and the host is reachable. "
+                    f"({type(e).__name__}: {e})"
+                ) from e
+            except httpx.TimeoutException as e:
+                raise ValueError(f"Timed out connecting to {origin} ({HTTP_TIMEOUT_S}s).") from e
+            except httpx.HTTPError as e:
                 last_err = e
                 continue
 
-    raise (last_err or RuntimeError(f"No agent card found under {origin}"))
+    raise ValueError(
+        f"No A2A agent card found at {origin}. Tried: "
+        + ", ".join(candidates)
+        + f". Last error: {last_err}"
+    )
+
+
+def _looks_like_agent_card(card: object) -> bool:
+    """An A2A card must at minimum be a JSON object with a `name` and either a `url`
+    (JSON-RPC endpoint) or a non-empty `skills` array. This rejects random JSON pages
+    that happen to live at /.well-known paths."""
+    if not isinstance(card, dict):
+        return False
+    if not isinstance(card.get("name"), str) or not card["name"].strip():
+        return False
+    has_url = isinstance(card.get("url"), str) and card["url"].strip()
+    has_skills = isinstance(card.get("skills"), list) and len(card["skills"]) > 0
+    has_interfaces = isinstance(card.get("interfaces"), list) and len(card["interfaces"]) > 0
+    return bool(has_url or has_skills or has_interfaces)

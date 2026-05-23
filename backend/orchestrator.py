@@ -48,7 +48,7 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
             return
 
         agent_name = card.get("name") or target_url
-        endpoint = card.get("url") or target_url
+        endpoint = card.get("url") or _extract_jsonrpc_endpoint(card) or target_url
         await bus.emit("card_fetched", card=card)
 
         static_findings = run_static_checks(card)
@@ -237,6 +237,17 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
     except Exception as e:
         log.exception("scan crashed")
         await bus.emit("error", message=f"Scan failed: {type(e).__name__}: {e}")
+
+
+def _extract_jsonrpc_endpoint(card: dict[str, Any]) -> str | None:
+    """Fall back to interfaces[].url when the card omits a top-level `url`."""
+    interfaces = card.get("interfaces")
+    if not isinstance(interfaces, list):
+        return None
+    for it in interfaces:
+        if isinstance(it, dict) and it.get("type") == "json-rpc" and isinstance(it.get("url"), str):
+            return it["url"]
+    return None
 
 
 def _payload_with_canary(payload: str, canary: str, test_type: str) -> str:
