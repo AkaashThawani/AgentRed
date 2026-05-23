@@ -29,7 +29,7 @@ import {
   AdaptiveFollowupEvent,
 } from '@/lib/types'
 
-const PRODUCT_NAME = 'Agent Scanner'
+const PRODUCT_NAME = 'AgentRed'
 
 export default function ScannerPage() {
   const [url, setUrl]                         = useState('')
