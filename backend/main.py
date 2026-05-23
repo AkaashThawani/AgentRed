@@ -34,7 +34,7 @@ async def health() -> dict:
 async def start_scan(req: ScanRequest) -> ScanResponse:
     scan_id = str(uuid4())
     bus = create_bus(scan_id)
-    asyncio.create_task(run_scan(bus, target_url=req.target_url))
+    asyncio.create_task(run_scan(bus, target_url=req.target_url, auth_headers=req.auth_headers))
     return ScanResponse(scan_id=scan_id, stream_url=f"/stream/{scan_id}")
 
 

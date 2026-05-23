@@ -28,7 +28,7 @@ log = logging.getLogger("agentred.orchestrator")
 _TRIGGER_SEVERITIES = {Severity.HIGH, Severity.CRITICAL}
 
 
-async def run_scan(bus: EventBus, target_url: str) -> None:
+async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] | None = None) -> None:
     """Top-level scan entrypoint. Owns the lifecycle of one scan."""
     started = time.monotonic()
     canary = f"CANARY_{uuid4().hex[:12]}"
@@ -57,6 +57,42 @@ async def run_scan(bus: EventBus, target_url: str) -> None:
             await bus.emit("finding", finding=f.model_dump(mode="json"))
             _safe_store(bus.scan_id, target_url, agent_name, f)
 
+        # -------- Card-vs-reality probe --------
+        # If the card says auth.schemes is empty but the live endpoint returns 401/403,
+        # the card is lying about its security posture. That's a real, distinct issue.
+        try:
+            probe = await send_a2a_message(endpoint, "ping", extra_headers=auth_headers)
+            probe_status = probe.get("status_code")
+            declared_auth = (card.get("authentication") or {}).get("schemes") or []
+            if probe_status in (401, 403) and not declared_auth and not auth_headers:
+                mismatch = Finding(
+                    phase="static",
+                    test_type="card_auth_mismatch",
+                    severity=Severity.CRITICAL,
+                    passed=False,
+                    title="Agent card lies about authentication requirements",
+                    description=(
+                        f"The agent card declares `authentication.schemes = []` (no auth required), "
+                        f"but the live endpoint returned HTTP {probe_status} for an unauthenticated request. "
+                        "Clients trusting the card will fail every call. Worse, downstream agents may "
+                        "expose credentials trying to recover from the silent contract violation."
+                    ),
+                    evidence=Evidence(
+                        request='POST /a2a (empty auth, message="ping")',
+                        response=(probe.get("response_text") or "")[:1000],
+                        highlight=f"HTTP {probe_status}",
+                    ),
+                    recommendation=(
+                        "Update the agent card to declare the actual `authentication.schemes` and "
+                        "`securitySchemes` the endpoint enforces."
+                    ),
+                )
+                all_findings.append(mismatch)
+                await bus.emit("finding", finding=mismatch.model_dump(mode="json"))
+                _safe_store(bus.scan_id, target_url, agent_name, mismatch)
+        except Exception as e:
+            log.warning("endpoint probe failed: %s", e)
+
         # -------- Phase 2: behavioral --------
         await bus.emit("phase", phase="behavioral", message="Generating test cases...")
         try:
@@ -72,16 +108,34 @@ async def run_scan(bus: EventBus, target_url: str) -> None:
         # Run tests concurrently with a bounded semaphore
         sem = asyncio.Semaphore(MAX_CONCURRENT_TESTS)
 
-        async def run_one(t: TestCase) -> Finding:
+        async def run_one(t: TestCase) -> tuple[Finding, int | None]:
             async with sem:
                 await bus.emit("test_running", test_id=t.id, test_type=t.test_type.value)
-                send_result = await send_a2a_message(endpoint, _payload_with_canary(t.payload, canary, t.test_type.value))
+                send_result = await send_a2a_message(
+                    endpoint,
+                    _payload_with_canary(t.payload, canary, t.test_type.value),
+                    extra_headers=auth_headers,
+                )
+                status = send_result.get("status_code")
+                # Skip LLM judgment if the call was rejected by auth before reaching the agent.
+                if status in (401, 403):
+                    blocked = Finding(
+                        phase="behavioral", test_type=t.test_type.value, severity=Severity.LOW,
+                        passed=True, title="Blocked by authentication",
+                        description=f"Request returned HTTP {status} — exploit could not reach the agent.",
+                        evidence=Evidence(request=t.payload, response=(send_result.get("response_text") or "")[:500]),
+                        recommendation="Provide a valid API key to scan behavioral surface.",
+                        skill_targeted=t.skill_targeted,
+                    )
+                    return blocked, status
                 finding = await analyze_response(t, send_result, canary=canary)
-                return finding
+                return finding, status
 
         # Initial behavioral tests
         results = await asyncio.gather(*(run_one(t) for t in tests), return_exceptions=True)
         triggered_pairs: list[tuple[Finding, TestCase, str]] = []
+        blocked_status_count: dict[int, int] = {}
+        behavioral_findings_emitted = 0
         for t, res in zip(tests, results):
             if isinstance(res, Exception):
                 log.exception("test failed", exc_info=res)
@@ -94,11 +148,35 @@ async def run_scan(bus: EventBus, target_url: str) -> None:
                 all_findings.append(err_finding)
                 await bus.emit("finding", finding=err_finding.model_dump(mode="json"))
                 continue
-            all_findings.append(res)
-            await bus.emit("finding", finding=res.model_dump(mode="json"))
-            _safe_store(bus.scan_id, target_url, agent_name, res)
-            if not res.passed and res.severity in _TRIGGER_SEVERITIES:
-                triggered_pairs.append((res, t, res.evidence.response or ""))
+            finding, status = res
+            if status in (401, 403):
+                blocked_status_count[status] = blocked_status_count.get(status, 0) + 1
+            all_findings.append(finding)
+            behavioral_findings_emitted += 1
+            await bus.emit("finding", finding=finding.model_dump(mode="json"))
+            _safe_store(bus.scan_id, target_url, agent_name, finding)
+            if not finding.passed and finding.severity in _TRIGGER_SEVERITIES:
+                triggered_pairs.append((finding, t, finding.evidence.response or ""))
+
+        # If most behavioral requests were blocked by auth, emit one meta-finding so the
+        # report doesn't look like the agent is safe when really we couldn't test it.
+        blocked_total = sum(blocked_status_count.values())
+        if behavioral_findings_emitted > 0 and blocked_total / behavioral_findings_emitted >= 0.7:
+            meta = Finding(
+                phase="behavioral", test_type="scan_blocked_by_auth",
+                severity=Severity.MEDIUM, passed=False,
+                title="Behavioral scan blocked — target requires authentication",
+                description=(
+                    f"{blocked_total}/{behavioral_findings_emitted} behavioral requests were rejected "
+                    f"with HTTP {sorted(blocked_status_count)[0]}. Exploits never reached the agent. "
+                    "Provide a valid API key (via `auth_headers` in /scan) to perform a meaningful behavioral assessment."
+                ),
+                evidence=Evidence(),
+                recommendation="Re-run with credentials, OR confirm with the operator that this surface is intended to be locked down.",
+            )
+            all_findings.append(meta)
+            await bus.emit("finding", finding=meta.model_dump(mode="json"))
+            _safe_store(bus.scan_id, target_url, agent_name, meta)
 
         # -------- Adaptive follow-ups --------
         for parent_finding, parent_test, parent_response in triggered_pairs:
@@ -129,9 +207,10 @@ async def run_scan(bus: EventBus, target_url: str) -> None:
                 if isinstance(fres, Exception):
                     log.exception("followup test failed", exc_info=fres)
                     continue
-                all_findings.append(fres)
-                await bus.emit("finding", finding=fres.model_dump(mode="json"))
-                _safe_store(bus.scan_id, target_url, agent_name, fres)
+                fup_finding, _ = fres
+                all_findings.append(fup_finding)
+                await bus.emit("finding", finding=fup_finding.model_dump(mode="json"))
+                _safe_store(bus.scan_id, target_url, agent_name, fup_finding)
 
         # -------- Report --------
         await bus.emit("phase", phase="report", message="Computing trust score...")
