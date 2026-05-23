@@ -1,6 +1,6 @@
 import { Report } from './types'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
 
 export async function checkHealth(): Promise<boolean> {
   try {
@@ -19,49 +19,82 @@ export async function startScan(targetUrl: string): Promise<{ scan_id: string; s
   })
 
   if (!response.ok) {
-    throw new Error(`Failed to start scan: ${response.statusText}`)
+    const errorText = await response.text().catch(() => response.statusText)
+    throw new Error(`Failed to start scan: ${errorText}`)
   }
 
   const data = await response.json()
   return {
     scan_id: data.scan_id,
-    stream_url: data.stream_url.startsWith('/') ? `${API_BASE_URL}${data.stream_url}` : data.stream_url,
+    stream_url: buildStreamUrl(data.stream_url),
   }
 }
 
-export function openScanStream(streamUrl: string, onEvent: (event: string, data: unknown) => void, onError: (error: Error) => void): EventSource {
+export function buildStreamUrl(streamUrl: string): string {
+  if (!streamUrl) return ''
+  return streamUrl.startsWith('/') ? `${API_BASE_URL}${streamUrl}` : streamUrl
+}
+
+export async function fetchReport(scanId: string): Promise<Report> {
+  const response = await fetch(`${API_BASE_URL}/report/${scanId}`)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch report: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+export function openScanStream(
+  streamUrl: string,
+  onEvent: (event: string, data: unknown) => void,
+  onError: (error: Error) => void
+): EventSource {
   const eventSource = new EventSource(streamUrl)
+  // Track whether the scan completed normally so we can ignore the
+  // onerror that fires when the server closes the connection after report.
+  let completed = false
 
-  eventSource.addEventListener('scan_started', (event) => {
-    onEvent('scan_started', JSON.parse(event.data))
-  })
-  eventSource.addEventListener('card_fetched', (event) => {
-    onEvent('card_fetched', JSON.parse(event.data))
-  })
-  eventSource.addEventListener('phase', (event) => {
-    onEvent('phase', JSON.parse(event.data))
-  })
-  eventSource.addEventListener('finding', (event) => {
-    onEvent('finding', JSON.parse(event.data))
-  })
-  eventSource.addEventListener('test_generated', (event) => {
-    onEvent('test_generated', JSON.parse(event.data))
-  })
-  eventSource.addEventListener('test_running', (event) => {
-    onEvent('test_running', JSON.parse(event.data))
-  })
-  eventSource.addEventListener('adaptive_followup', (event) => {
-    onEvent('adaptive_followup', JSON.parse(event.data))
-  })
-  eventSource.addEventListener('report', (event) => {
-    onEvent('report', JSON.parse(event.data))
-  })
-  eventSource.addEventListener('error', (event) => {
-    onEvent('error', JSON.parse(event.data))
+  const makeHandler = (eventType: string) => (event: MessageEvent) => {
+    try {
+      onEvent(eventType, JSON.parse(event.data))
+    } catch {
+      onError(new Error(`Malformed ${eventType} event data`))
+    }
+  }
+
+  eventSource.addEventListener('scan_started', makeHandler('scan_started'))
+  eventSource.addEventListener('card_fetched', makeHandler('card_fetched'))
+  eventSource.addEventListener('phase', makeHandler('phase'))
+  eventSource.addEventListener('finding', makeHandler('finding'))
+  eventSource.addEventListener('test_generated', makeHandler('test_generated'))
+  eventSource.addEventListener('test_running', makeHandler('test_running'))
+  eventSource.addEventListener('adaptive_followup', makeHandler('adaptive_followup'))
+
+  eventSource.addEventListener('report', (event: MessageEvent) => {
+    completed = true
+    try {
+      onEvent('report', JSON.parse(event.data))
+    } catch {
+      onError(new Error('Malformed report event data'))
+    }
+    eventSource.close()
   })
 
+  // Named SSE error event sent by the backend (event: error)
+  eventSource.addEventListener('error', (event: MessageEvent) => {
+    completed = true
+    try {
+      onEvent('error', JSON.parse(event.data))
+    } catch {
+      onError(new Error('Malformed error event data'))
+    }
+    eventSource.close()
+  })
+
+  // Network / connection-level error — ignore if scan already completed
   eventSource.onerror = () => {
-    onError(new Error('EventSource connection error'))
+    if (!completed) {
+      onError(new Error('Stream connection failed'))
+    }
     eventSource.close()
   }
 
@@ -70,7 +103,10 @@ export function openScanStream(streamUrl: string, onEvent: (event: string, data:
 
 export async function downloadReportJson(report: Report): Promise<void> {
   const element = document.createElement('a')
-  element.setAttribute('href', 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(report, null, 2)))
+  element.setAttribute(
+    'href',
+    'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(report, null, 2))
+  )
   element.setAttribute('download', `report-${Date.now()}.json`)
   element.style.display = 'none'
   document.body.appendChild(element)

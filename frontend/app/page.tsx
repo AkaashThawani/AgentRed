@@ -35,6 +35,7 @@ export default function ScannerPage() {
   const [adaptiveTests, setAdaptiveTests] = useState<TestCase[]>([])
   const [scanError, setScanError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [scanId, setScanId] = useState<string | null>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
 
   // Check backend health on mount
@@ -58,6 +59,7 @@ export default function ScannerPage() {
     setAllEvents([])
     setReport(null)
     setScanError(null)
+    setScanId(null)
     setShowAdaptive(false)
     if (eventSourceRef.current) {
       eventSourceRef.current.close()
@@ -65,54 +67,8 @@ export default function ScannerPage() {
     }
   }, [])
 
-  // Handle real scan
-  const handleScan = useCallback(
-    async (targetUrl: string, isMock: boolean = false) => {
-      resetScan()
-      setLoading(true)
-      setScanError(null)
-
-      try {
-        if (isMock) {
-          setBackendStatus('mock')
-          setScanning(true)
-
-          for (const event of generateMockEvents()) {
-            await new Promise((resolve) => setTimeout(resolve, 300))
-            handleScanEvent(event.type, event)
-          }
-        } else {
-          if (backendStatus === 'offline') {
-            throw new Error('Backend is offline. Use "Run Demo Scan" to see a demo.')
-          }
-
-          const { stream_url } = await startScan(targetUrl)
-          setScanning(true)
-
-          eventSourceRef.current = openScanStream(
-            stream_url,
-            (type, data) => {
-              handleScanEvent(type, data as ScanEvent)
-            },
-            (error) => {
-              console.error('Stream error:', error)
-              setScanError('Connection error during scan')
-              setScanning(false)
-            }
-          )
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        setScanError(message)
-        setScanning(false)
-      } finally {
-        setLoading(false)
-      }
-    },
-    [backendStatus, resetScan]
-  )
-
-  const handleScanEvent = (type: string, data: any) => {
+  // Dispatch individual scan events into UI state
+  const handleScanEvent = useCallback((type: string, data: any) => {
     const event: ScanEvent = { ...data, type: type as any, timestamp: data.timestamp || Date.now() }
     setAllEvents((prev) => [...prev, event])
 
@@ -135,12 +91,84 @@ export default function ScannerPage() {
       setTimeout(() => setShowAdaptive(false), 4000)
     } else if (type === 'report') {
       setReport(data.report)
+      setCurrentPhase('report')
       setScanning(false)
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+        eventSourceRef.current = null
+      }
     } else if (type === 'error') {
       setScanError(data.message)
       setScanning(false)
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+        eventSourceRef.current = null
+      }
     }
-  }
+  }, [])
+
+  // Start a scan — real backend or demo mock
+  const handleScan = useCallback(
+    async (targetUrl: string, isMock: boolean = false) => {
+      // Validate URL before touching any state
+      if (!isMock) {
+        const trimmed = targetUrl.trim()
+        if (!trimmed) {
+          setScanError('Please enter a target URL')
+          return
+        }
+        try {
+          const parsed = new URL(trimmed)
+          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            setScanError('URL must use http:// or https://')
+            return
+          }
+        } catch {
+          setScanError('Please enter a valid URL (e.g. https://agent.example.com)')
+          return
+        }
+      }
+
+      resetScan()
+      setLoading(true)
+
+      try {
+        if (isMock) {
+          setBackendStatus('mock')
+          setScanning(true)
+          for (const event of generateMockEvents()) {
+            await new Promise((resolve) => setTimeout(resolve, 300))
+            handleScanEvent(event.type, event)
+          }
+        } else {
+          if (backendStatus === 'offline') {
+            throw new Error('Backend is offline. Use "Run Demo Scan" to see a demo.')
+          }
+
+          const { scan_id, stream_url } = await startScan(targetUrl.trim())
+          setScanId(scan_id)
+          setScanning(true)
+
+          eventSourceRef.current = openScanStream(
+            stream_url,
+            (type, data) => handleScanEvent(type, data as ScanEvent),
+            (error) => {
+              console.error('Stream error:', error)
+              setScanError('Stream connection failed. Please try again.')
+              setScanning(false)
+            }
+          )
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error occurred'
+        setScanError(message)
+        setScanning(false)
+      } finally {
+        setLoading(false)
+      }
+    },
+    [backendStatus, resetScan, handleScanEvent]
+  )
 
   const handleCopySummary = async () => {
     if (report) {
