@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
@@ -9,14 +10,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 
 from .events import create_bus, get_bus, get_report
-from .mock_scan import run_mock_scan
 from .models import ScanRequest, ScanResponse
+from .orchestrator import run_scan
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 app = FastAPI(title="AgentRed", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # hackathon
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -31,17 +34,7 @@ async def health() -> dict:
 async def start_scan(req: ScanRequest) -> ScanResponse:
     scan_id = str(uuid4())
     bus = create_bus(scan_id)
-    # TODO: replace with real orchestrator. For now, MVP uses mock.
-    asyncio.create_task(run_mock_scan(bus, target_url=req.target_url))
-    return ScanResponse(scan_id=scan_id, stream_url=f"/stream/{scan_id}")
-
-
-@app.get("/scan/mock", response_model=ScanResponse)
-async def start_mock_scan() -> ScanResponse:
-    """Convenience endpoint: start a canned mock scan for UI dev."""
-    scan_id = str(uuid4())
-    bus = create_bus(scan_id)
-    asyncio.create_task(run_mock_scan(bus))
+    asyncio.create_task(run_scan(bus, target_url=req.target_url))
     return ScanResponse(scan_id=scan_id, stream_url=f"/stream/{scan_id}")
 
 

@@ -237,6 +237,7 @@ Highlight the `adaptive_followup` event with a special animation — that's the 
 
 ---
 
-## Mock SSE for frontend dev
+## Local demo target
 
-Backend will provide `GET /stream/mock` that replays a canned scan so the UI engineer can build without the backend being live. Coming in the next push.
+A deliberately-vulnerable A2A agent is included at `honeypot/`. Run it on port 8001
+and point AgentRed at `http://localhost:8001` — see [../honeypot/README.md](../honeypot/README.md).

@@ -40,7 +40,30 @@ Or from the browser open `http://localhost:8000/docs`.
 - `main.py` — FastAPI app + routes
 - `models.py` — Pydantic types (mirrors CONTRACT.md)
 - `events.py` — per-scan async event bus
-- `mock_scan.py` — canned scan replay for UI dev
-- `orchestrator.py` *(coming next)* — real Gemini-driven scan
-- `tools/` *(coming next)* — fetch_card, static rules, generate_tests, send_a2a, analyze
-- `storage.py` *(coming next)* — ClickHouse + Datadog writes
+- `orchestrator.py` — agentic scan loop with adaptive follow-ups
+- `scoring.py` — trust score + grade formula
+- `storage.py` — ClickHouse + Datadog writes (best-effort)
+- `config.py` — env-var-driven configuration
+- `tools/`
+  - `card.py` — `/.well-known/agent-card.json` fetch
+  - `static_rules.py` — deterministic static analyzer
+  - `a2a_client.py` — JSON-RPC `message/send` over httpx
+  - `gemini.py` — shared async Gemini client
+  - `test_gen.py` — Gemini-generated typed `TestCase` objects + adaptive follow-ups
+  - `response_analyzer.py` — hybrid deterministic + LLM judgment
+
+## Demo against the local honeypot
+
+In one terminal:
+```powershell
+uvicorn honeypot.main:app --reload --port 8001
+```
+In another:
+```powershell
+uvicorn backend.main:app --reload --port 8000
+```
+Then:
+```powershell
+curl -Method POST http://localhost:8000/scan -ContentType application/json -Body '{"target_url":"http://localhost:8001"}'
+```
+Use the returned `stream_url` to consume SSE events.
