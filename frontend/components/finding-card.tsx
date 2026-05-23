@@ -1,7 +1,7 @@
 'use client'
 
-import { motion } from 'framer-motion'
-import { ChevronDown } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { ChevronDown, Target, Layers } from 'lucide-react'
 import { useState } from 'react'
 import { Finding } from '@/lib/types'
 import { SeverityBadge } from './severity-badge'
@@ -11,111 +11,155 @@ interface FindingCardProps {
   index: number
 }
 
+const BORDER_COLOR: Record<string, string> = {
+  CRITICAL: 'border-red-600/50',
+  HIGH:     'border-orange-600/40',
+  MEDIUM:   'border-amber-600/30',
+  LOW:      'border-blue-600/25',
+  PASSED:   'border-teal-600/30',
+}
+
+const GLOW: Record<string, string> = {
+  CRITICAL: 'shadow-[0_0_20px_rgba(220,38,38,0.25)]',
+  HIGH:     'shadow-[0_0_16px_rgba(234,88,12,0.18)]',
+  MEDIUM:   'shadow-[0_0_12px_rgba(217,119,6,0.12)]',
+  LOW:      '',
+  PASSED:   '',
+}
+
+const LEFT_BAR: Record<string, string> = {
+  CRITICAL: 'bg-red-500',
+  HIGH:     'bg-orange-500',
+  MEDIUM:   'bg-amber-500',
+  LOW:      'bg-blue-500',
+  PASSED:   'bg-teal-500',
+}
+
 export function FindingCard({ finding, index }: FindingCardProps) {
   const [expanded, setExpanded] = useState(false)
 
-  const severityGlowMap = {
-    CRITICAL: 'shadow-lg shadow-red-900/50',
-    HIGH: 'shadow-lg shadow-orange-900/40',
-    MEDIUM: 'shadow-lg shadow-amber-900/30',
-    LOW: 'shadow-lg shadow-blue-900/20',
-    PASSED: 'shadow-lg shadow-teal-900/30',
-  }
-
-  const borderColorMap = {
-    CRITICAL: 'border-red-700/40',
-    HIGH: 'border-orange-700/40',
-    MEDIUM: 'border-amber-700/30',
-    LOW: 'border-blue-700/20',
-    PASSED: 'border-teal-700/30',
-  }
+  const border = BORDER_COLOR[finding.severity] ?? 'border-gray-700/30'
+  const glow   = GLOW[finding.severity] ?? ''
+  const bar    = LEFT_BAR[finding.severity] ?? 'bg-gray-600'
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20, x: -20 }}
-      animate={{ opacity: 1, y: 0, x: 0 }}
-      transition={{ delay: index * 0.1 }}
-      className={`border rounded-lg p-4 bg-card/40 backdrop-blur-sm transition-all ${borderColorMap[finding.severity]} ${severityGlowMap[finding.severity]}`}
+      initial={{ opacity: 0, x: 12 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: Math.min(index * 0.08, 0.4) }}
+      className={`relative rounded-xl border bg-black/50 backdrop-blur-sm overflow-hidden transition-shadow ${border} ${glow}`}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <div className="flex items-center gap-3 mb-2">
-            <SeverityBadge severity={finding.severity} />
-            <span className="text-xs text-purple-300/60 font-mono">{finding.test_type}</span>
-          </div>
-          <h3 className="font-semibold text-white mb-2">{finding.title}</h3>
-          <p className="text-sm text-gray-300 mb-3">{finding.description}</p>
+      {/* Severity accent bar */}
+      <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${bar}`} />
 
-          <div className="grid grid-cols-2 gap-3 text-xs mb-3">
-            {finding.skill_targeted && (
-              <div>
-                <span className="text-gray-500">Skill:</span>
-                <span className="text-purple-300 ml-2">{finding.skill_targeted}</span>
-              </div>
-            )}
-            <div>
-              <span className="text-gray-500">Phase:</span>
-              <span className="text-purple-300 ml-2">{finding.phase}</span>
+      <div className="pl-3 pr-3 pt-3 pb-3 ml-1">
+        {/* Header row */}
+        <div className="flex items-start gap-2">
+          <div className="flex-1 min-w-0">
+            {/* Badge + test type */}
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+              <SeverityBadge severity={finding.severity} />
+              <span className="text-xs text-gray-500 font-mono truncate">
+                {finding.test_type.replace(/_/g, ' ')}
+              </span>
             </div>
+
+            {/* Title */}
+            <h3 className="text-sm font-semibold text-white leading-snug mb-1.5">
+              {finding.title}
+            </h3>
+
+            {/* Description — truncated when collapsed */}
+            <p
+              className={`text-xs text-gray-400 leading-relaxed ${
+                expanded ? '' : 'line-clamp-2'
+              }`}
+            >
+              {finding.description}
+            </p>
           </div>
 
-          {finding.recommendation && (
-            <div className="bg-purple-900/20 border border-purple-700/30 rounded p-2 mb-3">
-              <p className="text-xs text-purple-200">
-                <span className="font-semibold">Recommendation:</span> {finding.recommendation}
-              </p>
-            </div>
-          )}
+          {/* Expand toggle */}
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="flex-shrink-0 mt-0.5 p-1.5 rounded-lg hover:bg-white/[0.06] transition-colors"
+            aria-label={expanded ? 'Collapse' : 'Expand'}
+          >
+            <motion.div animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
+              <ChevronDown className="w-4 h-4 text-purple-400/70" />
+            </motion.div>
+          </button>
         </div>
 
-        {finding.evidence && (
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="flex-shrink-0 p-2 hover:bg-purple-900/20 rounded transition-colors"
-          >
-            <ChevronDown
-              className="w-5 h-5 text-purple-300 transition-transform"
-              style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
-            />
-          </button>
-        )}
+        {/* Compact meta row */}
+        <div className="flex items-center gap-3 mt-2 flex-wrap">
+          {finding.skill_targeted && (
+            <span className="flex items-center gap-1 text-xs text-gray-500">
+              <Target className="w-3 h-3 text-purple-400/50" />
+              <span className="text-purple-300/60">{finding.skill_targeted}</span>
+            </span>
+          )}
+          <span className="flex items-center gap-1 text-xs text-gray-500">
+            <Layers className="w-3 h-3 text-purple-400/50" />
+            <span className="text-purple-300/60">{finding.phase}</span>
+          </span>
+        </div>
+
+        {/* Expandable detail section */}
+        <AnimatePresence>
+          {expanded && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="mt-3 pt-3 border-t border-white/[0.06] space-y-3">
+                {finding.recommendation && (
+                  <div className="bg-purple-950/50 border border-purple-700/30 rounded-lg p-2.5">
+                    <div className="text-xs font-semibold text-purple-300 mb-1">Recommendation</div>
+                    <p className="text-xs text-purple-200/70 leading-relaxed">
+                      {finding.recommendation}
+                    </p>
+                  </div>
+                )}
+
+                {finding.evidence && (
+                  <div className="space-y-2">
+                    {finding.evidence.request && (
+                      <div>
+                        <div className="text-xs font-semibold text-purple-300/70 mb-1">Request</div>
+                        <div className="bg-black/50 border border-white/[0.06] rounded p-2 text-xs text-gray-400 font-mono leading-relaxed overflow-auto max-h-24">
+                          {finding.evidence.request}
+                        </div>
+                      </div>
+                    )}
+
+                    {finding.evidence.response && (
+                      <div>
+                        <div className="text-xs font-semibold text-purple-300/70 mb-1">Response</div>
+                        <div className="bg-black/50 border border-white/[0.06] rounded p-2 text-xs text-gray-400 font-mono leading-relaxed overflow-auto max-h-24">
+                          {finding.evidence.response}
+                        </div>
+                      </div>
+                    )}
+
+                    {finding.evidence.smoking_gun && (
+                      <div>
+                        <div className="text-xs font-semibold text-red-400 mb-1">Smoking Gun</div>
+                        <div className="bg-red-950/40 border border-red-700/30 rounded p-2 text-xs text-red-200 font-mono leading-relaxed">
+                          {finding.evidence.smoking_gun}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-
-      {expanded && finding.evidence && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          className="mt-4 pt-4 border-t border-purple-700/20 space-y-3"
-        >
-          {finding.evidence.request && (
-            <div className="space-y-1">
-              <div className="text-xs font-semibold text-purple-300">Request:</div>
-              <div className="bg-black/40 p-2 rounded text-xs text-gray-300 font-mono overflow-auto max-h-20">
-                {finding.evidence.request}
-              </div>
-            </div>
-          )}
-
-          {finding.evidence.response && (
-            <div className="space-y-1">
-              <div className="text-xs font-semibold text-purple-300">Response:</div>
-              <div className="bg-black/40 p-2 rounded text-xs text-gray-300 font-mono overflow-auto max-h-20">
-                {finding.evidence.response}
-              </div>
-            </div>
-          )}
-
-          {finding.evidence.smoking_gun && (
-            <div className="space-y-1">
-              <div className="text-xs font-semibold text-red-400">Smoking Gun:</div>
-              <div className="bg-red-900/20 border border-red-700/30 p-2 rounded text-xs text-red-200 font-mono">
-                {finding.evidence.smoking_gun}
-              </div>
-            </div>
-          )}
-        </motion.div>
-      )}
     </motion.div>
   )
 }

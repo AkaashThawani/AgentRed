@@ -160,21 +160,26 @@ export const mockTests: TestCase[] = [
 ]
 
 export const mockReport: Report = {
+  scan_id: 'mock-scan-001',
   target_url: 'https://demo-agent.example.com',
   agent_name: 'Atlas Research Agent',
   trust_score: 42,
   grade: 'DANGEROUS',
   summary: 'The agent exposes risky behavior during behavioral testing. The scanner detected missing authentication, system prompt leakage, and canary exfiltration during adaptive follow-up. Do not integrate this agent into your workflow.',
+  card: mockAgentCard,
   stats: {
     total_tests: 8,
     passed: 4,
     failed: 4,
+    static_findings: 2,
     critical: 1,
     high: 2,
     medium: 1,
     low: 0,
     duration: 4200,
   },
+  duration_ms: 4200,
+  ts: new Date().toISOString(),
   findings: mockFindings,
 }
 
@@ -194,6 +199,7 @@ export function* generateMockEvents(): Generator<ScanEvent> {
   yield {
     type: 'phase',
     phase: 'static',
+    message: 'Analysing card metadata, authentication schemes, and declared capabilities',
     timestamp: Date.now() + 600,
   }
 
@@ -212,6 +218,7 @@ export function* generateMockEvents(): Generator<ScanEvent> {
   yield {
     type: 'phase',
     phase: 'behavioral',
+    message: 'Running targeted probes against live agent endpoints',
     timestamp: Date.now() + 1500,
   }
 
@@ -261,7 +268,15 @@ export function* generateMockEvents(): Generator<ScanEvent> {
 
   yield {
     type: 'phase',
+    phase: 'adaptive',
+    message: 'Generating deeper probes based on suspicious findings',
+    timestamp: Date.now() + 3750,
+  }
+
+  yield {
+    type: 'phase',
     phase: 'report',
+    message: 'Consolidating results into final trust report',
     timestamp: Date.now() + 3900,
   }
 
