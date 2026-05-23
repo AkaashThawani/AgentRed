@@ -125,7 +125,8 @@ export default function ScannerPage() {
       setCurrentPhase('fetching')
       setScanStartTime(Date.now())
     } else if (type === 'card_fetched') {
-      setAgentCard(data.agent_card)
+      // Backend sends { card }, per CONTRACT.md. Accept either key just in case.
+      setAgentCard(data.card ?? data.agent_card)
     } else if (type === 'phase') {
       setCurrentPhase(data.phase)
       setPhaseMessage(data.message ?? '')

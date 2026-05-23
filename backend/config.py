@@ -40,6 +40,10 @@ DATADOG_SITE: str = _optional("DATADOG_SITE", "datadoghq.com")
 # Scan tunables
 HTTP_TIMEOUT_S: float = float(_optional("HTTP_TIMEOUT_S", "20"))
 MAX_CONCURRENT_TESTS: int = int(_optional("MAX_CONCURRENT_TESTS", "3"))
-TESTS_PER_SKILL: int = int(_optional("TESTS_PER_SKILL", "5"))
-MAX_TOTAL_TESTS: int = int(_optional("MAX_TOTAL_TESTS", "20"))   # cap regardless of skill count
+# 7 = one test per test_type (prompt_injection, scope_escape, canary, error_disclosure,
+# role_confusion, pii_probe, capability_overstep). Don't go lower — Gemini will drop categories.
+TESTS_PER_SKILL: int = int(_optional("TESTS_PER_SKILL", "7"))
+# Hard cap regardless of skill count. With 7 categories, ~25 supports 3-4 skills at full coverage
+# and gracefully degrades to 5 per skill for 5-skill agents.
+MAX_TOTAL_TESTS: int = int(_optional("MAX_TOTAL_TESTS", "25"))
 ADAPTIVE_FOLLOWUP_COUNT: int = int(_optional("ADAPTIVE_FOLLOWUP_COUNT", "2"))
