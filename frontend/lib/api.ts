@@ -1,7 +1,11 @@
 import { Report } from './types'
 
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || 'https://agentred.onrender.com'
+// Route everything through Vercel's same-origin `/api/*` proxy (configured in next.config.mjs)
+// so the browser never sees render.com. Ad blockers (uBlock Origin, Brave Shields, corporate
+// DNS filters, etc.) commonly block onrender.com outright, which surfaced as
+// `net::ERR_BLOCKED_BY_CLIENT` in production. Same-origin requests are immune to that.
+// In `next dev` the rewrite forwards `/api/*` to the BACKEND env var (or localhost:8000).
+export const API_BASE_URL = '/api'
 
 export async function checkHealth(): Promise<boolean> {
   try {
