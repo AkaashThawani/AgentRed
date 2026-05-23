@@ -53,14 +53,30 @@ export function openScanStream(streamUrl: string, onEvent: (event: string, data:
   eventSource.addEventListener('adaptive_followup', (event) => {
     onEvent('adaptive_followup', JSON.parse(event.data))
   })
+  let receivedTerminalEvent = false
+
   eventSource.addEventListener('report', (event) => {
+    receivedTerminalEvent = true
     onEvent('report', JSON.parse(event.data))
+    eventSource.close()
   })
-  eventSource.addEventListener('error', (event) => {
-    onEvent('error', JSON.parse(event.data))
+  // Backend "error" SSE event (named event with JSON payload). Distinct from EventSource's
+  // built-in 'error' which has no data and fires on transport/close.
+  eventSource.addEventListener('error', (event: MessageEvent) => {
+    if (event.data) {
+      receivedTerminalEvent = true
+      onEvent('error', JSON.parse(event.data))
+      eventSource.close()
+    }
   })
 
   eventSource.onerror = () => {
+    // EventSource fires onerror on normal stream close too (after the server stops sending).
+    // If we already got a 'report' or 'error' event, this is the expected close.
+    if (receivedTerminalEvent) {
+      eventSource.close()
+      return
+    }
     onError(new Error('EventSource connection error'))
     eventSource.close()
   }
