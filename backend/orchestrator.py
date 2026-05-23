@@ -19,7 +19,9 @@ from .scoring import compute_score, compute_stats
 from .storage import write_finding
 from .tools.a2a_client import send_a2a_message
 from .tools.card import fetch_agent_card
+from .tools.card_behavior import generate_card_behavior_finding
 from .tools.response_analyzer import analyze_response
+from .tools.rpc_probes import probe_baseline, probe_tasks_get_random, probe_tasks_list
 from .tools.static_rules import run_static_checks
 from .tools.test_gen import generate_followup_tests, generate_test_cases
 from .config import MAX_CONCURRENT_TESTS, ADAPTIVE_FOLLOWUP_COUNT, TESTS_PER_SKILL
@@ -56,6 +58,17 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
             all_findings.append(f)
             await bus.emit("finding", finding=f.model_dump(mode="json"))
             _safe_store(bus.scan_id, target_url, agent_name, f)
+
+        # -------- JSON-RPC method probes (tasks/list, tasks/get) --------
+        try:
+            for probe in (probe_tasks_list(endpoint, auth_headers), probe_tasks_get_random(endpoint, auth_headers)):
+                f = await probe
+                if f is not None:
+                    all_findings.append(f)
+                    await bus.emit("finding", finding=f.model_dump(mode="json"))
+                    _safe_store(bus.scan_id, target_url, agent_name, f)
+        except Exception as e:
+            log.warning("rpc probe failed: %s", e)
 
         # -------- Card-vs-reality probe --------
         # If the card says auth.schemes is empty but the live endpoint returns 401/403,
@@ -94,6 +107,17 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
             log.warning("endpoint probe failed: %s", e)
 
         # -------- Phase 2: behavioral --------
+        # Baseline first — sets "normal" behavior context
+        await bus.emit("phase", phase="behavioral", message="Running baseline in-scope request...")
+        try:
+            baseline_finding, _ = await probe_baseline(endpoint, auth_headers, card.get("skills") or [])
+            if baseline_finding is not None:
+                all_findings.append(baseline_finding)
+                await bus.emit("finding", finding=baseline_finding.model_dump(mode="json"))
+                _safe_store(bus.scan_id, target_url, agent_name, baseline_finding)
+        except Exception as e:
+            log.warning("baseline probe failed: %s", e)
+
         await bus.emit("phase", phase="behavioral", message="Generating test cases...")
         try:
             tests = await generate_test_cases(card, canary, n=TESTS_PER_SKILL)
@@ -211,6 +235,18 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
                 all_findings.append(fup_finding)
                 await bus.emit("finding", finding=fup_finding.model_dump(mode="json"))
                 _safe_store(bus.scan_id, target_url, agent_name, fup_finding)
+
+        # -------- Card-vs-behavior cross-check (meta-judgment) --------
+        await bus.emit("phase", phase="behavioral", message="Cross-checking observed behavior against card claims...")
+        try:
+            behavioral_findings = [f for f in all_findings if f.phase == "behavioral"]
+            meta_finding = await generate_card_behavior_finding(card, behavioral_findings)
+            if meta_finding is not None:
+                all_findings.append(meta_finding)
+                await bus.emit("finding", finding=meta_finding.model_dump(mode="json"))
+                _safe_store(bus.scan_id, target_url, agent_name, meta_finding)
+        except Exception as e:
+            log.warning("card-vs-behavior cross-check failed: %s", e)
 
         # -------- Report --------
         await bus.emit("phase", phase="report", message="Computing trust score...")

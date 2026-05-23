@@ -118,6 +118,19 @@ def run_static_checks(card: dict[str, Any]) -> list[Finding]:
         except Exception:
             pass
 
+    # wellKnownURI: card declares a canonical location that may differ from where we fetched it
+    well_known = card.get("wellKnownURI")
+    fetched_from = (card.get("_meta") or {}).get("fetched_from")
+    if isinstance(well_known, str) and fetched_from and well_known.strip().rstrip("/") != fetched_from.strip().rstrip("/"):
+        findings.append(_finding(
+            "wellknown_uri_mismatch", Severity.MEDIUM,
+            "Card's declared canonical wellKnownURI differs from where we fetched it",
+            f"The card was fetched from `{fetched_from}` but declares its canonical location as `{well_known}`. "
+            "This could be a mirror, a stale copy, or an impersonation. Clients should treat them as separate identities.",
+            "Confirm the canonical card matches what is served at the declared wellKnownURI.",
+            Evidence(highlight=f"{fetched_from} vs {well_known}"),
+        ))
+
     # skills
     skills = card.get("skills") or []
     if not skills:

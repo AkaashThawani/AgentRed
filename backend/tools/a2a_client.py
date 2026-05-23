@@ -10,6 +10,33 @@ import httpx
 from ..config import HTTP_TIMEOUT_S
 
 
+async def send_a2a_raw(endpoint_url: str, method: str, params: dict[str, Any],
+                       extra_headers: dict[str, str] | None = None) -> dict[str, Any]:
+    """Send an arbitrary JSON-RPC 2.0 request and return parsed response info."""
+    req_body = {"jsonrpc": "2.0", "id": str(uuid4()), "method": method, "params": params}
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    if extra_headers:
+        headers.update(extra_headers)
+    try:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_S, follow_redirects=True) as client:
+            resp = await client.post(endpoint_url, json=req_body, headers=headers)
+        text = resp.text
+        try:
+            parsed = resp.json()
+        except json.JSONDecodeError:
+            parsed = None
+        return {
+            "status_code": resp.status_code, "response_json": parsed,
+            "response_text": text, "extracted_text": _extract_text(parsed) or text,
+            "error": None, "request_body": req_body,
+        }
+    except httpx.HTTPError as e:
+        return {
+            "status_code": None, "response_json": None, "response_text": "",
+            "extracted_text": "", "error": f"{type(e).__name__}: {e}", "request_body": req_body,
+        }
+
+
 async def send_a2a_message(endpoint_url: str, payload_text: str,
                            extra_headers: dict[str, str] | None = None) -> dict[str, Any]:
     """POST a JSON-RPC `message/send` to the agent endpoint.
