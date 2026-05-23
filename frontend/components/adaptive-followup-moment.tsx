@@ -139,7 +139,6 @@ export function AdaptiveInlineCard({ reason, newTests }: AdaptiveInlineCardProps
       animate={{ opacity: 1, scale: 1, y: 0 }}
       transition={{ duration: 0.4 }}
       className="bg-gradient-to-br from-purple-950/70 to-purple-900/30 border border-purple-500/40 rounded-xl p-4 backdrop-blur-sm"
-      style={{ boxShadow: '0 0 24px rgba(139,92,246,0.2)' }}
     >
       {/* Header */}
       <div className="flex items-center gap-2 mb-2.5">
