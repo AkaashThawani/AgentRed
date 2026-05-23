@@ -85,24 +85,38 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
                     passed=False,
                     title="Agent card lies about authentication requirements",
                     description=(
-                        f"The agent card declares `authentication.schemes = []` (no auth required), "
-                        f"but the live endpoint returned HTTP {probe_status} for an unauthenticated request. "
-                        "Clients trusting the card will fail every call. Worse, downstream agents may "
-                        "expose credentials trying to recover from the silent contract violation."
+                        f"Card declares `authentication.schemes = []` but the endpoint returned HTTP {probe_status} "
+                        "for an unauthenticated request. Clients trusting the card will fail every call."
                     ),
                     evidence=Evidence(
                         request='POST /a2a (empty auth, message="ping")',
                         response=(probe.get("response_text") or "")[:1000],
                         highlight=f"HTTP {probe_status}",
                     ),
-                    recommendation=(
-                        "Update the agent card to declare the actual `authentication.schemes` and "
-                        "`securitySchemes` the endpoint enforces."
-                    ),
+                    recommendation="Update the card to declare the actual auth scheme the endpoint enforces.",
                 )
                 all_findings.append(mismatch)
                 await bus.emit("finding", finding=mismatch.model_dump(mode="json"))
                 _safe_store(bus.scan_id, target_url, agent_name, mismatch)
+            elif probe_status in (404, 405):
+                broken = Finding(
+                    phase="static",
+                    test_type="card_endpoint_unreachable",
+                    severity=Severity.HIGH,
+                    passed=False,
+                    title="Agent endpoint declared in card is unreachable for JSON-RPC POST",
+                    description=(
+                        f"Card declares `url` (or `interfaces[].url`) of `{endpoint}` but it returned HTTP "
+                        f"{probe_status} for a POST. The card is advertising an interface the server does not implement."
+                    ),
+                    evidence=Evidence(request=f"POST {endpoint}", highlight=f"HTTP {probe_status}"),
+                    recommendation=(
+                        "Fix the endpoint URL in the card, or implement A2A JSON-RPC at the declared URL."
+                    ),
+                )
+                all_findings.append(broken)
+                await bus.emit("finding", finding=broken.model_dump(mode="json"))
+                _safe_store(bus.scan_id, target_url, agent_name, broken)
         except Exception as e:
             log.warning("endpoint probe failed: %s", e)
 
@@ -141,14 +155,19 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
                     extra_headers=auth_headers,
                 )
                 status = send_result.get("status_code")
-                # Skip LLM judgment if the call was rejected by auth before reaching the agent.
-                if status in (401, 403):
+                # Skip LLM judgment when the request never reached the agent's logic.
+                # Any non-2xx (or transport error) means we cannot evaluate the agent's behavior.
+                if status is None or status < 200 or status >= 300:
+                    reason = _blocked_reason(status)
                     blocked = Finding(
                         phase="behavioral", test_type=t.test_type.value, severity=Severity.LOW,
-                        passed=True, title="Blocked by authentication",
-                        description=f"Request returned HTTP {status} — exploit could not reach the agent.",
+                        passed=True, title=f"Blocked — {reason}",
+                        description=(
+                            f"Request returned HTTP {status} — exploit could not reach the agent. "
+                            "No vulnerability inference possible from this response."
+                        ),
                         evidence=Evidence(request=t.payload, response=(send_result.get("response_text") or "")[:500]),
-                        recommendation="Provide a valid API key to scan behavioral surface.",
+                        recommendation="Address the underlying transport/auth/method issue to enable behavioral scanning.",
                         skill_targeted=t.skill_targeted,
                     )
                     return blocked, status
@@ -182,22 +201,12 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
             if not finding.passed and finding.severity in _TRIGGER_SEVERITIES:
                 triggered_pairs.append((finding, t, finding.evidence.response or ""))
 
-        # If most behavioral requests were blocked by auth, emit one meta-finding so the
-        # report doesn't look like the agent is safe when really we couldn't test it.
+        # If most behavioral requests were blocked at the HTTP layer, emit one meta-finding
+        # so the report reflects "could not test" instead of "agent is safe."
         blocked_total = sum(blocked_status_count.values())
         if behavioral_findings_emitted > 0 and blocked_total / behavioral_findings_emitted >= 0.7:
-            meta = Finding(
-                phase="behavioral", test_type="scan_blocked_by_auth",
-                severity=Severity.MEDIUM, passed=False,
-                title="Behavioral scan blocked — target requires authentication",
-                description=(
-                    f"{blocked_total}/{behavioral_findings_emitted} behavioral requests were rejected "
-                    f"with HTTP {sorted(blocked_status_count)[0]}. Exploits never reached the agent. "
-                    "Provide a valid API key (via `auth_headers` in /scan) to perform a meaningful behavioral assessment."
-                ),
-                evidence=Evidence(),
-                recommendation="Re-run with credentials, OR confirm with the operator that this surface is intended to be locked down.",
-            )
+            primary_status = max(blocked_status_count.items(), key=lambda kv: kv[1])[0]
+            meta = _make_blocked_meta(blocked_total, behavioral_findings_emitted, primary_status)
             all_findings.append(meta)
             await bus.emit("finding", finding=meta.model_dump(mode="json"))
             _safe_store(bus.scan_id, target_url, agent_name, meta)
@@ -284,6 +293,61 @@ def _extract_jsonrpc_endpoint(card: dict[str, Any]) -> str | None:
         if isinstance(it, dict) and it.get("type") == "json-rpc" and isinstance(it.get("url"), str):
             return it["url"]
     return None
+
+
+def _blocked_reason(status: int | None) -> str:
+    if status is None:
+        return "transport error / unreachable"
+    if status in (401, 403):
+        return "authentication required"
+    if status == 404:
+        return "endpoint not found"
+    if status == 405:
+        return "endpoint does not accept POST"
+    if status == 429:
+        return "rate limited"
+    if 500 <= status < 600:
+        return f"server error ({status})"
+    return f"HTTP {status}"
+
+
+def _make_blocked_meta(blocked: int, total: int, primary_status: int | None) -> Finding:
+    reason = _blocked_reason(primary_status)
+    if primary_status in (401, 403):
+        title = "Behavioral scan blocked — target requires authentication"
+        sev = Severity.MEDIUM
+        rec = "Re-run with credentials via `auth_headers`, or confirm this surface is meant to be locked down."
+    elif primary_status == 405:
+        title = "Behavioral scan blocked — endpoint declared in card rejects POST"
+        sev = Severity.HIGH  # card lies about its own interface
+        rec = "Either the card's `url`/`interfaces[].url` is wrong, or the endpoint doesn't implement A2A JSON-RPC."
+    elif primary_status == 404:
+        title = "Behavioral scan blocked — endpoint URL returns 404"
+        sev = Severity.HIGH
+        rec = "Fix the endpoint URL in the agent card."
+    elif primary_status == 429:
+        title = "Behavioral scan blocked — target rate-limited the scanner"
+        sev = Severity.LOW
+        rec = "Retry with lower concurrency or after a backoff."
+    elif primary_status and 500 <= primary_status < 600:
+        title = f"Behavioral scan blocked — target returns {primary_status}"
+        sev = Severity.MEDIUM
+        rec = "Target appears broken. Confirm the agent endpoint is healthy before re-scanning."
+    else:
+        title = "Behavioral scan blocked at HTTP layer"
+        sev = Severity.MEDIUM
+        rec = "Resolve the transport-level error to enable behavioral scanning."
+    return Finding(
+        phase="behavioral", test_type="scan_blocked_by_http_error",
+        severity=sev, passed=False, title=title,
+        description=(
+            f"{blocked}/{total} behavioral requests were rejected ({reason}, status {primary_status}). "
+            "Exploits never reached the agent's logic; the per-test results below are not vulnerability "
+            "signals — they reflect that the call never executed."
+        ),
+        evidence=Evidence(highlight=f"HTTP {primary_status} on {blocked}/{total} requests"),
+        recommendation=rec,
+    )
 
 
 def _payload_with_canary(payload: str, canary: str, test_type: str) -> str:
