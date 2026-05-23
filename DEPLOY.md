@@ -49,12 +49,27 @@ EXPOSE 8000
 CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-### Fly.io
+### Fly.io (monorepo — Dockerfile at root, fly.toml in backend/)
+
+The Dockerfile lives at the repo root so the `backend` Python package imports
+resolve cleanly. The fly.toml lives at `backend/fly.toml`. **Deploy from the
+repo root.**
+
 ```powershell
-fly launch --no-deploy
-fly secrets set GEMINI_KEY=... CLICKHOUSE_URL=... DATADOG_API_KEY=...
-fly deploy
+# from repo root
+fly auth whoami
+fly apps create agentred-backend         # one-time. pick your own name.
+# edit backend/fly.toml: set `app = "agentred-backend"` to match the name you just created
+fly secrets set GEMINI_KEY=<your_key> --app agentred-backend
+fly deploy --config backend/fly.toml --app agentred-backend
 ```
+
+Common gotchas:
+- **"app not found"** → you skipped `fly apps create` or `app =` in fly.toml doesn't match.
+  Run `fly apps list` to see what's actually registered.
+- **Machine sleeps mid-scan** → fly.toml sets `auto_stop_machines = "off"`. Don't change it; SSE streams need the VM awake.
+- **Path errors during build** → make sure you're deploying from the **repo root**, not from `backend/`.
+  The Dockerfile does `COPY backend/...` which only resolves from the root.
 
 ### Render
 1. New → Web Service → connect this repo
