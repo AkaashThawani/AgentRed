@@ -14,7 +14,7 @@ from typing import Any
 from uuid import uuid4
 
 from .events import EventBus, save_report
-from .models import Finding, Grade, Report, Severity, TestCase
+from .models import Evidence, Finding, Grade, Report, Severity, TestCase
 from .scoring import compute_score, compute_stats
 from .storage import write_finding
 from .tools.a2a_client import send_a2a_message
