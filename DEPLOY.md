@@ -33,52 +33,28 @@ Frontend points at `http://localhost:8000`. That's it for demoing.
 
 ---
 
-## Cloud — single-host (Fly.io / Render / Railway / EC2)
+## Cloud — Render (current deployment)
 
 Backend is a stock FastAPI service. No state on disk (everything is in-memory per scan
-+ optional ClickHouse for persistence). Easy to deploy anywhere that runs Python.
++ optional ClickHouse for persistence). Render runs it directly from this repo — no Dockerfile needed.
 
-### Dockerfile (drop in at repo root)
-```dockerfile
-FROM python:3.12-slim
-WORKDIR /app
-COPY backend/requirements.txt /app/backend/requirements.txt
-RUN pip install --no-cache-dir -r backend/requirements.txt
-COPY backend /app/backend
-EXPOSE 8000
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
+### Settings in the Render dashboard
+| Field | Value |
+|---|---|
+| Repo | this monorepo |
+| Branch | `main` |
+| Root Directory | *(leave blank)* |
+| Runtime | Python 3 |
+| Build Command | `pip install -r backend/requirements.txt` |
+| Start Command | `uvicorn backend.main:app --host 0.0.0.0 --port $PORT` |
+| Health Check Path | `/health` |
+| Instance Type | **Starter ($7/mo)** — not Free (free tier sleeps and kills SSE streams) |
+| Environment | `GEMINI_KEY=<your key>` (+ optional ClickHouse/Datadog vars) |
 
-### Fly.io (monorepo — Dockerfile at root, fly.toml in backend/)
-
-The Dockerfile lives at the repo root so the `backend` Python package imports
-resolve cleanly. The fly.toml lives at `backend/fly.toml`. **Deploy from the
-repo root.**
-
-```powershell
-# from repo root
-fly auth whoami
-fly apps create agentred-backend         # one-time. pick your own name.
-# edit backend/fly.toml: set `app = "agentred-backend"` to match the name you just created
-fly secrets set GEMINI_KEY=<your_key> --app agentred-backend
-fly deploy --config backend/fly.toml --app agentred-backend
-```
-
-Common gotchas:
-- **"app not found"** → you skipped `fly apps create` or `app =` in fly.toml doesn't match.
-  Run `fly apps list` to see what's actually registered.
-- **Machine sleeps mid-scan** → fly.toml sets `auto_stop_machines = "off"`. Don't change it; SSE streams need the VM awake.
-- **Path errors during build** → make sure you're deploying from the **repo root**, not from `backend/`.
-  The Dockerfile does `COPY backend/...` which only resolves from the root.
-
-### Render
-1. New → Web Service → connect this repo
-2. Build command: `pip install -r backend/requirements.txt`
-3. Start command: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
-4. Environment → add `GEMINI_KEY` (and optional infra)
-
-### Railway
-Same as Render — set the start command + env vars in the dashboard.
+**Important:** leave Root Directory blank. The code uses package-relative imports
+(`from .events import ...`) so it must run as the `backend` package, which means
+starting from repo root with `backend.main:app`. If you set Root Directory =
+`backend`, you have to prepend `cd .. &&` to the start command.
 
 ---
 
