@@ -30,7 +30,7 @@ export function TrustScoreGauge({ report }: TrustScoreGaugeProps) {
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
-      className={`bg-gradient-to-br ${colors.bg} border border-purple-700/40 rounded-lg p-8 text-center shadow-2xl`}
+      className={`bg-gradient-to-br ${colors.bg} border border-slate-700/40 rounded-lg p-8 text-center shadow-2xl`}
       style={{
         boxShadow: `0 0 40px ${colors.glow}40, 0 0 20px ${colors.glow}20`,
       }}
@@ -118,7 +118,7 @@ export function TrustScoreGauge({ report }: TrustScoreGaugeProps) {
         >
           <div className="bg-black/30 rounded p-2">
             <div className="text-gray-400">Tests</div>
-            <div className="font-bold text-lg text-purple-300">{report.stats.total_tests}</div>
+            <div className="font-bold text-lg text-slate-300">{report.stats.total_tests}</div>
           </div>
           <div className="bg-black/30 rounded p-2">
             <div className="text-gray-400">Passed</div>

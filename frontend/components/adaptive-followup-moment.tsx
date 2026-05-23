@@ -78,7 +78,7 @@ export function AdaptiveFollowupMoment({ reason, newTests }: AdaptiveFollowupMom
             </div>
             {newTests.map((test, idx) => (
               <motion.div
-                key={test.test_id}
+                key={test.id ?? test.test_id}
                 initial={{ opacity: 0, x: -16 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: idx * 0.1 }}
@@ -160,7 +160,7 @@ export function AdaptiveInlineCard({ reason, newTests }: AdaptiveInlineCardProps
       <div className="space-y-1.5">
         {newTests.slice(0, 4).map((test) => (
           <div
-            key={test.test_id}
+            key={test.id ?? test.test_id}
             className="flex items-center gap-2 text-xs"
           >
             <Zap className="w-3 h-3 text-orange-400/80 flex-shrink-0" />

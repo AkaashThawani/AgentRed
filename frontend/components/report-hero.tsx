@@ -141,21 +141,34 @@ export function ReportHero({ report, onDownload, onCopy, copied }: ReportHeroPro
               transition={{ delay: 0.4 }}
               className="flex gap-2 flex-shrink-0"
             >
-              {(
-                [
-                  { label: 'Tests',  value: report.stats.total_tests, cls: 'text-purple-300' },
-                  { label: 'Passed', value: report.stats.passed,      cls: 'text-teal-300'   },
-                  { label: 'Failed', value: report.stats.failed,      cls: 'text-red-300'    },
-                ] as const
-              ).map(({ label, value, cls }) => (
-                <div
-                  key={label}
-                  className="bg-white/[0.03] border border-white/[0.07] rounded-xl px-3 py-2.5 text-center min-w-[52px]"
-                >
-                  <div className={`text-xl font-bold leading-none ${cls}`}>{value}</div>
-                  <div className="text-xs text-gray-500 mt-0.5">{label}</div>
-                </div>
-              ))}
+              {(() => {
+                // Behavioral tests may not run at all (e.g. endpoint short-circuit). Show static
+                // checks separately so a 0/0/0 doesn't read as "nothing happened".
+                const tiles: { label: string; value: number; cls: string }[] = []
+                if ((report.stats.static_findings ?? 0) > 0) {
+                  tiles.push({
+                    label: 'Static',
+                    value: report.stats.static_findings ?? 0,
+                    cls: 'text-amber-300',
+                  })
+                }
+                if (report.stats.total_tests > 0) {
+                  tiles.push(
+                    { label: 'Behavioral', value: report.stats.total_tests, cls: 'text-slate-300' },
+                    { label: 'Passed',     value: report.stats.passed,      cls: 'text-teal-300'   },
+                    { label: 'Failed',     value: report.stats.failed,      cls: 'text-red-300'    },
+                  )
+                }
+                return tiles.map(({ label, value, cls }) => (
+                  <div
+                    key={label}
+                    className="bg-white/[0.03] border border-white/[0.07] rounded-xl px-3 py-2.5 text-center min-w-[60px]"
+                  >
+                    <div className={`text-xl font-bold leading-none ${cls}`}>{value}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">{label}</div>
+                  </div>
+                ))
+              })()}
             </motion.div>
           )}
         </div>
@@ -186,7 +199,7 @@ export function ReportHero({ report, onDownload, onCopy, copied }: ReportHeroPro
             </span>
           )}
           {report.stats?.static_findings != null && report.stats.static_findings > 0 && (
-            <span className="px-2 py-0.5 bg-purple-900/40 border border-purple-700/40 rounded text-xs text-purple-300 font-mono">
+            <span className="px-2 py-0.5 bg-slate-800/40 border border-slate-700/40 rounded text-xs text-slate-300 font-mono">
               {report.stats.static_findings}×STATIC
             </span>
           )}
@@ -219,7 +232,7 @@ export function ReportHero({ report, onDownload, onCopy, copied }: ReportHeroPro
             onClick={onCopy}
             size="sm"
             variant="outline"
-            className="border-purple-700/40 hover:bg-purple-900/20 text-xs h-7 px-3"
+            className="border-slate-700/40 hover:bg-slate-800/20 text-xs h-7 px-3"
           >
             {copied
               ? <Check className="w-3 h-3 mr-1.5 text-teal-400" />

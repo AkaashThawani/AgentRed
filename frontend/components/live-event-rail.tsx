@@ -30,7 +30,7 @@ export function LiveEventRail({ events }: LiveEventRailProps) {
   const getEventColor = (type: string) => {
     const colors: Record<string, string> = {
       scan_started: 'text-teal-400',
-      card_fetched: 'text-purple-400',
+      card_fetched: 'text-slate-400',
       phase: 'text-blue-400',
       finding: 'text-orange-400',
       test_generated: 'text-cyan-400',
@@ -51,21 +51,21 @@ export function LiveEventRail({ events }: LiveEventRailProps) {
 
   return (
     <motion.div
-      className="border border-purple-700/40 rounded-lg bg-card/40 backdrop-blur-sm overflow-hidden"
+      className="border border-slate-700/40 rounded-lg bg-card/40 backdrop-blur-sm overflow-hidden"
     >
       {/* Header */}
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="w-full flex items-center justify-between gap-3 p-4 hover:bg-purple-900/10 transition-colors border-b border-purple-700/20"
+        className="w-full flex items-center justify-between gap-3 p-4 hover:bg-slate-800/10 transition-colors border-b border-slate-700/20"
       >
         <div className="flex items-center gap-3">
-          <span className="text-xs font-mono text-purple-300/60">LIVE EVENTS</span>
-          <span className="text-xs font-bold px-2 py-1 bg-purple-900/40 border border-purple-700/60 rounded text-purple-300">
+          <span className="text-xs font-mono text-slate-300/60">LIVE EVENTS</span>
+          <span className="text-xs font-bold px-2 py-1 bg-slate-800/40 border border-slate-700/60 rounded text-slate-300">
             {events.length}
           </span>
         </div>
         <ChevronDown
-          className="w-4 h-4 text-purple-300 transition-transform"
+          className="w-4 h-4 text-slate-300 transition-transform"
           style={{ transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}
         />
       </button>
@@ -85,11 +85,11 @@ export function LiveEventRail({ events }: LiveEventRailProps) {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: idx * 0.02 }}
-                className="flex items-start gap-3 p-2 rounded bg-black/20 hover:bg-black/40 transition-colors border border-transparent hover:border-purple-700/20"
+                className="flex items-start gap-3 p-2 rounded bg-black/20 hover:bg-black/40 transition-colors border border-transparent hover:border-slate-700/20"
               >
                 <span className={`text-lg ${getEventColor(event.type)} flex-shrink-0`}>{getEventIcon(event.type)}</span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold text-purple-300">{formatEventLabel(event.type)}</div>
+                  <div className="text-xs font-semibold text-slate-300">{formatEventLabel(event.type)}</div>
                   <div className="text-xs text-gray-400 mt-0.5">
                     {new Date(event.timestamp).toLocaleTimeString()}
                   </div>

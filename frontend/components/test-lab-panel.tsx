@@ -26,11 +26,11 @@ export function TestLabPanel({ tests }: TestLabPanelProps) {
   const runningCount = tests.filter((t) => t.status === 'running').length
 
   return (
-    <div className="bg-black/50 border border-purple-700/40 rounded-xl overflow-hidden backdrop-blur-sm">
+    <div className="bg-black/50 border border-slate-700/40 rounded-xl overflow-hidden backdrop-blur-sm">
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-purple-700/20">
-        <FlaskConical className="w-3.5 h-3.5 text-purple-400" />
-        <span className="text-xs font-mono text-purple-400/70 uppercase tracking-widest">Test Lab</span>
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-700/20">
+        <FlaskConical className="w-3.5 h-3.5 text-slate-400" />
+        <span className="text-xs font-mono text-slate-400/70 uppercase tracking-widest">Test Lab</span>
 
         <div className="ml-auto flex items-center gap-2">
           {runningCount > 0 && (
@@ -43,7 +43,7 @@ export function TestLabPanel({ tests }: TestLabPanelProps) {
               {runningCount} running
             </span>
           )}
-          <span className="px-1.5 py-0.5 bg-purple-900/40 border border-purple-700/40 rounded text-xs text-purple-300">
+          <span className="px-1.5 py-0.5 bg-slate-800/40 border border-slate-700/40 rounded text-xs text-slate-300">
             {tests.length}
           </span>
         </div>
@@ -70,7 +70,7 @@ export function TestLabPanel({ tests }: TestLabPanelProps) {
 
               {/* Test info */}
               <div className="flex-1 min-w-0">
-                <div className="text-xs font-mono text-purple-200 truncate">
+                <div className="text-xs font-mono text-slate-200 truncate">
                   {test.test_type.replace(/_/g, ' ')}
                 </div>
                 {test.what_to_watch && (

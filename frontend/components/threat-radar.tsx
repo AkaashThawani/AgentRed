@@ -20,6 +20,7 @@ export function ThreatRadar({ phase, events }: ThreatRadarProps) {
     waiting: 'Waiting',
     fetching: 'Fetching Card',
     static: 'Static Analysis',
+    conformance: 'Conformance Check',
     generating: 'Generating Tests',
     behavioral: 'Behavioral Testing',
     adaptive: 'Adaptive Probe',
@@ -112,8 +113,8 @@ export function ThreatRadar({ phase, events }: ThreatRadarProps) {
       {/* Center label */}
       <div className="absolute inset-0 flex items-center justify-center flex-col gap-2">
         <div className="text-center">
-          <div className="text-xs font-mono text-purple-300/60">PHASE</div>
-          <div className="text-lg font-bold text-purple-200">{phaseLabels[phase]}</div>
+          <div className="text-xs font-mono text-slate-300/60">PHASE</div>
+          <div className="text-lg font-bold text-slate-200">{phaseLabels[phase]}</div>
         </div>
       </div>
     </div>

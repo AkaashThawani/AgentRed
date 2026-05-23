@@ -5,12 +5,13 @@ import { Check, Loader2 } from 'lucide-react'
 import { ScanPhase } from '@/lib/types'
 
 const STEPS: { phase: ScanPhase; label: string; shortLabel: string }[] = [
-  { phase: 'fetching',   label: 'Fetch Card',       shortLabel: 'Fetch'    },
-  { phase: 'static',     label: 'Static Analysis',  shortLabel: 'Static'   },
-  { phase: 'generating', label: 'Generate Tests',   shortLabel: 'Generate' },
-  { phase: 'behavioral', label: 'Behavioral',       shortLabel: 'Behav.'   },
-  { phase: 'adaptive',   label: 'Adaptive',         shortLabel: 'Adaptive' },
-  { phase: 'report',     label: 'Report',           shortLabel: 'Report'   },
+  { phase: 'fetching',    label: 'Fetch Card',       shortLabel: 'Fetch'    },
+  { phase: 'static',      label: 'Static Analysis',  shortLabel: 'Static'   },
+  { phase: 'conformance', label: 'Conformance',      shortLabel: 'Spec'     },
+  { phase: 'generating',  label: 'Generate Tests',   shortLabel: 'Generate' },
+  { phase: 'behavioral',  label: 'Behavioral',       shortLabel: 'Behav.'   },
+  { phase: 'adaptive',    label: 'Adaptive',         shortLabel: 'Adaptive' },
+  { phase: 'report',      label: 'Report',           shortLabel: 'Report'   },
 ]
 
 const PHASE_ORDER = STEPS.map((s) => s.phase)
@@ -104,7 +105,7 @@ export function PhaseTimeline({ currentPhase }: PhaseTimelineProps) {
                 isDone
                   ? 'text-teal-500'
                   : isActive
-                  ? 'text-purple-300'
+                  ? 'text-slate-300'
                   : 'text-gray-600'
               }`}
               style={{ fontSize: '0.6rem', lineHeight: '1.2' }}

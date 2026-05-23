@@ -62,8 +62,11 @@ async def generate_card_behavior_finding(card: dict[str, Any],
 
     caps = card.get("capabilities") or {}
 
-    # Sample up to ~20 observations to stay within token budget
-    sampled = behavioral_findings[:20]
+    # Sample observations to keep the prompt small enough that Pro responds quickly.
+    # Prefer FAILED findings (more interesting to a meta-judge); then fill with passed.
+    failed = [f for f in behavioral_findings if not f.passed][:8]
+    passed = [f for f in behavioral_findings if f.passed][:4]
+    sampled = failed + passed
     observations = "\n".join(_summarize_observation(f) for f in sampled)
 
     prompt = f"""AGENT CARD PROMISES:

@@ -28,7 +28,7 @@ export function AgentIdentityPassport({ agentCard, loading }: AgentIdentityPassp
   /* ── Loading skeleton ── */
   if (loading || !agentCard) {
     return (
-      <div className="border border-purple-700/40 rounded-lg p-4 bg-black/40 backdrop-blur-sm space-y-4">
+      <div className="border border-slate-700/40 rounded-lg p-4 bg-black/40 backdrop-blur-sm space-y-4">
         <Skel className="h-5 w-36" />
         <div className="space-y-2">
           <Skel className="h-3 w-full" />
@@ -57,12 +57,12 @@ export function AgentIdentityPassport({ agentCard, loading }: AgentIdentityPassp
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="border border-purple-700/40 rounded-lg p-4 bg-black/40 backdrop-blur-sm shadow-lg shadow-purple-900/30"
+      className="border border-slate-700/40 rounded-lg p-4 bg-black/40 backdrop-blur-sm shadow-lg shadow-purple-900/30"
     >
       {/* Header */}
       <div className="mb-4">
         <h3 className="text-lg font-bold text-white mb-0.5">Agent Identity Passport</h3>
-        <p className="text-xs text-purple-300/60 font-mono">Behavioral Trust Profile</p>
+        <p className="text-xs text-slate-300/60 font-mono">Behavioral Trust Profile</p>
       </div>
 
       {/* Warning banners */}
@@ -79,7 +79,7 @@ export function AgentIdentityPassport({ agentCard, loading }: AgentIdentityPassp
       <div className="space-y-3 mb-4">
         <div>
           <label className="text-xs text-gray-500 font-semibold uppercase">Agent Name</label>
-          <p className="text-base font-semibold text-purple-200">{agentCard.agent_name}</p>
+          <p className="text-base font-semibold text-slate-200">{agentCard.agent_name}</p>
         </div>
 
         {agentCard.description && (
@@ -92,7 +92,7 @@ export function AgentIdentityPassport({ agentCard, loading }: AgentIdentityPassp
         {agentCard.endpoint_url && (
           <div>
             <label className="text-xs text-gray-500 font-semibold uppercase">Endpoint</label>
-            <p className="text-xs text-purple-300 font-mono break-all">{agentCard.endpoint_url}</p>
+            <p className="text-xs text-slate-300 font-mono break-all">{agentCard.endpoint_url}</p>
           </div>
         )}
 
@@ -122,7 +122,7 @@ export function AgentIdentityPassport({ agentCard, loading }: AgentIdentityPassp
             {agentCard.authentication_schemes!.map((scheme) => (
               <span
                 key={scheme}
-                className="px-2 py-1 bg-purple-900/30 border border-purple-700/50 rounded text-xs text-purple-300 font-mono"
+                className="px-2 py-1 bg-slate-800/30 border border-slate-700/50 rounded text-xs text-slate-300 font-mono"
               >
                 {scheme}
               </span>
@@ -146,17 +146,17 @@ export function AgentIdentityPassport({ agentCard, loading }: AgentIdentityPassp
           </label>
           <div className="flex flex-wrap gap-2">
             {agentCard.capabilities.streaming && (
-              <span className="px-2 py-1 bg-purple-900/30 border border-purple-700/50 rounded text-xs text-purple-300">
+              <span className="px-2 py-1 bg-slate-800/30 border border-slate-700/50 rounded text-xs text-slate-300">
                 Streaming
               </span>
             )}
             {agentCard.capabilities.pushNotifications && (
-              <span className="px-2 py-1 bg-purple-900/30 border border-purple-700/50 rounded text-xs text-purple-300">
+              <span className="px-2 py-1 bg-slate-800/30 border border-slate-700/50 rounded text-xs text-slate-300">
                 Push Notifications
               </span>
             )}
             {agentCard.capabilities.stateTransitionHistory && (
-              <span className="px-2 py-1 bg-purple-900/30 border border-purple-700/50 rounded text-xs text-purple-300">
+              <span className="px-2 py-1 bg-slate-800/30 border border-slate-700/50 rounded text-xs text-slate-300">
                 State History
               </span>
             )}
@@ -176,9 +176,9 @@ export function AgentIdentityPassport({ agentCard, loading }: AgentIdentityPassp
                 key={skill.id ?? skill.skill_id ?? `skill-${idx}`}
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
-                className="bg-purple-900/10 border border-purple-700/30 rounded p-2"
+                className="bg-slate-800/10 border border-slate-700/30 rounded p-2"
               >
-                <div className="font-semibold text-sm text-purple-300">{skill.name}</div>
+                <div className="font-semibold text-sm text-slate-300">{skill.name}</div>
                 {skill.description && (
                   <div className="text-xs text-gray-400">{skill.description}</div>
                 )}
@@ -199,20 +199,20 @@ export function AgentIdentityPassport({ agentCard, loading }: AgentIdentityPassp
         }}
         role="button"
         tabIndex={0}
-        className="flex items-center gap-2 w-full p-2 hover:bg-purple-900/10 rounded transition-colors border border-purple-700/20"
+        className="flex items-center gap-2 w-full p-2 hover:bg-slate-800/10 rounded transition-colors border border-slate-700/20"
       >
         <ChevronDown
-          className="w-4 h-4 text-purple-300 transition-transform duration-200"
+          className="w-4 h-4 text-slate-300 transition-transform duration-200"
           style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
         />
-        <span className="text-xs font-semibold text-purple-300">Raw Agent Card JSON</span>
+        <span className="text-xs font-semibold text-slate-300">Raw Agent Card JSON</span>
         <button
           onClick={(e) => { e.stopPropagation(); copyJson() }}
-          className="ml-auto p-1 hover:bg-purple-900/20 rounded transition-colors"
+          className="ml-auto p-1 hover:bg-slate-800/20 rounded transition-colors"
         >
           {copied
             ? <Check className="w-4 h-4 text-teal-400" />
-            : <Copy className="w-4 h-4 text-purple-300" />}
+            : <Copy className="w-4 h-4 text-slate-300" />}
         </button>
       </div>
 
@@ -220,7 +220,7 @@ export function AgentIdentityPassport({ agentCard, loading }: AgentIdentityPassp
         <motion.div
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
-          className="mt-2 bg-black/40 rounded p-2 overflow-auto max-h-64 border border-purple-700/20"
+          className="mt-2 bg-black/40 rounded p-2 overflow-auto max-h-64 border border-slate-700/20"
         >
           <pre className="text-xs text-gray-300 font-mono">{JSON.stringify(agentCard, null, 2)}</pre>
         </motion.div>
