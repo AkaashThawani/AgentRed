@@ -37,22 +37,34 @@ export interface AgentCard {
   signature?: string
 }
 
+export interface OwaspLlm {
+  id: string     // e.g. "LLM01"
+  name: string   // e.g. "Prompt Injection"
+  url: string
+}
+
 export interface Finding {
   id: string
   severity: Severity
   passed: boolean
   title: string
-  phase: string
+  phase: string          // "static" | "conformance" | "behavioral"
   test_type: string
   description: string
   skill_targeted?: string
   recommendation?: string
-  timestamp: number
+  /** Backend may send `ts` (ISO string) or `timestamp` (number) — accept both */
+  timestamp?: number
+  ts?: string
   evidence?: {
     request?: string
     response?: string
-    smoking_gun?: string
+    highlight?: string       // backend canonical (CONTRACT.md)
+    smoking_gun?: string     // legacy alias
   }
+  /** Backend-enriched fields (CONTRACT.md) */
+  owasp_llm?: OwaspLlm
+  reproducer?: string        // copy-pasteable curl
 }
 
 export interface TestCase {
@@ -105,6 +117,7 @@ export type ScanPhase =
   | 'waiting'
   | 'fetching'
   | 'static'
+  | 'conformance'
   | 'generating'
   | 'behavioral'
   | 'adaptive'

@@ -37,5 +37,11 @@ async def generate_json(prompt: str, response_schema: Any, *, reasoning: bool = 
         resp = model.generate_content(prompt)
         return resp.text or ""
 
-    text = await asyncio.get_event_loop().run_in_executor(None, _call)
+    # Inner timeout — fail safe BEFORE orchestrator's 30s outer timeout. If the SDK
+    # buffers / retries / hangs internally, we abandon the future and the orchestrator
+    # gets a clean asyncio.TimeoutError it can handle.
+    text = await asyncio.wait_for(
+        asyncio.get_event_loop().run_in_executor(None, _call),
+        timeout=25.0,
+    )
     return text  # caller parses to its Pydantic model

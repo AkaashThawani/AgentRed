@@ -15,6 +15,8 @@ import { ScanCommandBar } from '@/components/scan-command-bar'
 import { ScanOverviewCard } from '@/components/scan-overview-card'
 import { ReportHero } from '@/components/report-hero'
 import { TestLabPanel } from '@/components/test-lab-panel'
+import { PastScansPanel } from '@/components/past-scans-panel'
+import { SponsorLinks } from '@/components/sponsor-links'
 import { checkHealth, startScan, openScanStream, copyReportSummary } from '@/lib/api'
 import { downloadReportPdf } from '@/lib/pdf'
 import { generateMockEvents } from '@/lib/mock-data'
@@ -301,7 +303,7 @@ export default function ScannerPage() {
       <motion.header
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="border-b border-purple-700/20 bg-black/40 backdrop-blur-xl sticky top-0 z-30"
+        className="border-b border-slate-700/20 bg-black/40 backdrop-blur-xl sticky top-0 z-30"
       >
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -309,21 +311,22 @@ export default function ScannerPage() {
               animate={{ rotate: 360 }}
               transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
             >
-              <Shield className="w-6 h-6 text-purple-400" />
+              <Shield className="w-6 h-6 text-slate-400" />
             </motion.div>
             <div>
               <h1 className="text-xl font-bold text-white">{PRODUCT_NAME}</h1>
-              <p className="text-xs text-purple-300/60">Behavioral trust scanning for AI agents</p>
+              <p className="text-xs text-slate-300/60">Behavioral trust scanning for AI agents</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <SponsorLinks />
             <StatusPill status={backendStatus} />
             <a
               href="https://github.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="p-2 hover:bg-purple-900/20 rounded transition-colors"
+              className="p-2 hover:bg-slate-800/20 rounded transition-colors"
             >
               <Github className="w-5 h-5 text-gray-400 hover:text-white" />
             </a>
@@ -356,10 +359,10 @@ export default function ScannerPage() {
               </div>
 
               {/* URL input card */}
-              <div className="bg-card/40 border border-purple-700/40 rounded-lg p-6 mb-4 max-w-2xl mx-auto">
+              <div className="bg-card/40 border border-slate-700/40 rounded-lg p-6 mb-4 max-w-2xl mx-auto">
                 <div className="flex gap-3 mb-4">
                   <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-purple-300 font-mono text-sm">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 font-mono text-sm">
                       $
                     </span>
                     <Input
@@ -368,7 +371,7 @@ export default function ScannerPage() {
                       value={url}
                       onChange={(e) => setUrl(e.target.value)}
                       disabled={loading}
-                      className="pl-8 bg-black/40 border-purple-700/40 text-white placeholder:text-gray-600 focus:border-purple-500/80 focus:shadow-lg focus:shadow-purple-900/20"
+                      className="pl-8 bg-black/40 border-slate-700/40 text-white placeholder:text-gray-600 focus:border-purple-500/80 focus:shadow-lg focus:shadow-purple-900/20"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && url) handleScan(url)
                       }}
@@ -398,22 +401,22 @@ export default function ScannerPage() {
                     onClick={() => handleScan('', true)}
                     disabled={loading}
                     variant="outline"
-                    className="flex-1 border-purple-700/40 hover:bg-purple-900/20"
+                    className="flex-1 border-slate-700/40 hover:bg-slate-800/20"
                   >
                     Run Demo Scan
                   </Button>
                 </div>
 
                 {/* ── Advanced: Auth Headers ── */}
-                <div className="mt-4 border-t border-purple-700/20 pt-3">
+                <div className="mt-4 border-t border-slate-700/20 pt-3">
                   <button
                     onClick={() => setShowAuthSection((v) => !v)}
                     className="flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300 transition-colors w-full text-left"
                   >
-                    <KeyRound className="w-3.5 h-3.5 text-purple-400/60 flex-shrink-0" />
+                    <KeyRound className="w-3.5 h-3.5 text-slate-400/60 flex-shrink-0" />
                     <span>Advanced: Auth Headers</span>
                     {Object.keys(authHeaders).length > 0 && (
-                      <span className="ml-1 px-1.5 py-0.5 bg-purple-900/40 border border-purple-700/40 rounded text-purple-300 font-mono text-[10px]">
+                      <span className="ml-1 px-1.5 py-0.5 bg-slate-800/40 border border-slate-700/40 rounded text-slate-300 font-mono text-[10px]">
                         {Object.keys(authHeaders).length}
                       </span>
                     )}
@@ -442,7 +445,7 @@ export default function ScannerPage() {
                                   key={key}
                                   className="flex items-center gap-2 bg-black/30 border border-white/[0.06] rounded px-2 py-1.5"
                                 >
-                                  <span className="text-xs text-purple-300/70 font-mono flex-1 truncate">
+                                  <span className="text-xs text-slate-300/70 font-mono flex-1 truncate">
                                     {key}
                                   </span>
                                   <span className="text-xs text-gray-600 font-mono tracking-widest">
@@ -467,7 +470,7 @@ export default function ScannerPage() {
                               placeholder="Header name"
                               value={headerKey}
                               onChange={(e) => setHeaderKey(e.target.value)}
-                              className="flex-1 h-7 text-xs bg-black/40 border-purple-700/40 text-white placeholder:text-gray-700"
+                              className="flex-1 h-7 text-xs bg-black/40 border-slate-700/40 text-white placeholder:text-gray-700"
                               onKeyDown={(e) => { if (e.key === 'Enter') addHeader() }}
                             />
                             <Input
@@ -475,7 +478,7 @@ export default function ScannerPage() {
                               placeholder="Value"
                               value={headerValue}
                               onChange={(e) => setHeaderValue(e.target.value)}
-                              className="flex-1 h-7 text-xs bg-black/40 border-purple-700/40 text-white placeholder:text-gray-700"
+                              className="flex-1 h-7 text-xs bg-black/40 border-slate-700/40 text-white placeholder:text-gray-700"
                               onKeyDown={(e) => { if (e.key === 'Enter') addHeader() }}
                             />
                             <Button
@@ -483,10 +486,10 @@ export default function ScannerPage() {
                               disabled={!headerKey.trim() || !headerValue}
                               size="sm"
                               variant="outline"
-                              className="h-7 w-7 p-0 border-purple-700/40 hover:bg-purple-900/20 flex-shrink-0"
+                              className="h-7 w-7 p-0 border-slate-700/40 hover:bg-slate-800/20 flex-shrink-0"
                               aria-label="Add header"
                             >
-                              <Plus className="w-3.5 h-3.5 text-purple-300" />
+                              <Plus className="w-3.5 h-3.5 text-slate-300" />
                             </Button>
                           </div>
 
@@ -514,7 +517,7 @@ export default function ScannerPage() {
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: idx * 0.05 }}
-                    className="px-3 py-1 bg-purple-900/20 border border-purple-700/40 rounded-full text-xs text-purple-300"
+                    className="px-3 py-1 bg-slate-800/20 border border-slate-700/40 rounded-full text-xs text-slate-300"
                   >
                     {chip}
                   </motion.div>
@@ -544,12 +547,12 @@ export default function ScannerPage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.05 }}
                     whileHover={{ scale: 1.03 }}
-                    className="border border-purple-700/40 rounded-lg p-4 bg-card/40 backdrop-blur-sm hover:border-purple-700/60 transition-all cursor-default"
+                    className="border border-slate-700/40 rounded-lg p-4 bg-card/40 backdrop-blur-sm hover:border-slate-700/60 transition-all cursor-default"
                   >
                     <div className="text-2xl mb-2">{module.icon}</div>
                     <h4 className="font-semibold text-white mb-1">{module.title}</h4>
                     <p className="text-xs text-gray-400 mb-3">{module.desc}</p>
-                    <div className="text-xs px-2 py-1 bg-purple-900/30 border border-purple-700/50 rounded inline-block text-purple-300">
+                    <div className="text-xs px-2 py-1 bg-slate-800/30 border border-slate-700/50 rounded inline-block text-slate-300">
                       Ready
                     </div>
                   </motion.div>
@@ -622,16 +625,16 @@ export default function ScannerPage() {
               <div className="lg:col-span-1 space-y-4">
 
                 {/* Phase timeline */}
-                <div className="bg-black/50 border border-purple-700/40 rounded-xl p-4 backdrop-blur-sm">
+                <div className="bg-black/50 border border-slate-700/40 rounded-xl p-4 backdrop-blur-sm">
                   <div className="flex items-center gap-2 mb-4">
-                    <span className="text-xs font-mono text-purple-400/60 uppercase tracking-widest">
+                    <span className="text-xs font-mono text-slate-400/60 uppercase tracking-widest">
                       Scan Phase
                     </span>
                     {scanning && (
                       <motion.div
                         animate={{ opacity: [1, 0.3, 1] }}
                         transition={{ duration: 1.4, repeat: Infinity }}
-                        className="ml-auto flex items-center gap-1.5 text-xs text-purple-300/50"
+                        className="ml-auto flex items-center gap-1.5 text-xs text-slate-300/50"
                       >
                         <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
                         LIVE
@@ -663,6 +666,9 @@ export default function ScannerPage() {
                 {/* Test lab */}
                 {tests.length > 0 && <TestLabPanel tests={tests} />}
 
+                {/* Past scans for this target (powered by ClickHouse /history) */}
+                <PastScansPanel targetUrl={url || null} refreshKey={report?.scan_id} />
+
                 {/* Live event rail */}
                 {allEvents.length > 0 && <LiveEventRail events={allEvents} />}
               </div>
@@ -672,7 +678,7 @@ export default function ScannerPage() {
                 <div className="sticky top-[5rem] space-y-3">
                   {/* Header */}
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-purple-400/60 uppercase tracking-widest flex-1">
+                    <span className="text-xs font-mono text-slate-400/60 uppercase tracking-widest flex-1">
                       Threat Findings
                     </span>
                     {findings.filter((f) => f.severity === 'CRITICAL').length > 0 && (
@@ -681,7 +687,7 @@ export default function ScannerPage() {
                       </span>
                     )}
                     {findings.length > 0 && (
-                      <span className="px-2 py-0.5 bg-purple-900/40 border border-purple-700/40 rounded text-xs text-purple-300 font-mono">
+                      <span className="px-2 py-0.5 bg-slate-800/40 border border-slate-700/40 rounded text-xs text-slate-300 font-mono">
                         {findings.length}
                       </span>
                     )}
@@ -700,7 +706,7 @@ export default function ScannerPage() {
                           transition={{ duration: 10, repeat: Infinity, ease: 'linear' }}
                           className="mb-3 opacity-20"
                         >
-                          <Crosshair className="w-10 h-10 text-purple-400" />
+                          <Crosshair className="w-10 h-10 text-slate-400" />
                         </motion.div>
                         <p className="text-sm text-gray-500">Scanning for threats…</p>
                         <p className="text-xs text-gray-600 mt-1">

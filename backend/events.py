@@ -7,8 +7,19 @@ import json
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator
 
-_buses: dict[str, "EventBus"] = {}
-_reports: dict[str, dict[str, Any]] = {}  # final reports cached for /report/{scan_id}
+from collections import OrderedDict
+
+# Bounded LRU caches — prevents unbounded growth across many scans (e.g. registry bulk scans).
+# Insertion-order kept; oldest evicted when capacity exceeded.
+_MAX_BUSES = 200
+_MAX_REPORTS = 200
+_buses: "OrderedDict[str, EventBus]" = OrderedDict()
+_reports: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
+
+
+def _evict_if_over(cache: OrderedDict, cap: int) -> None:
+    while len(cache) > cap:
+        cache.popitem(last=False)
 
 
 def _now() -> str:
@@ -45,6 +56,7 @@ class EventBus:
 def create_bus(scan_id: str) -> EventBus:
     bus = EventBus(scan_id)
     _buses[scan_id] = bus
+    _evict_if_over(_buses, _MAX_BUSES)
     return bus
 
 
@@ -54,6 +66,7 @@ def get_bus(scan_id: str) -> EventBus | None:
 
 def save_report(scan_id: str, report: dict[str, Any]) -> None:
     _reports[scan_id] = report
+    _evict_if_over(_reports, _MAX_REPORTS)
 
 
 def get_report(scan_id: str) -> dict[str, Any] | None:

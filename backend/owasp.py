@@ -11,17 +11,19 @@ from .models import OwaspLlm
 
 _BASE = "https://genai.owasp.org/llmrisk/"
 
+# OWASP's 2025 slugs are inconsistent: LLM01 kept the original slug from the 2024 list;
+# LLM02-LLM10 have "2025" mid-slug (e.g. llm022025-...). All verified live as of 2026-05.
 _ENTRIES: dict[str, OwaspLlm] = {
     "LLM01": OwaspLlm(id="LLM01", name="Prompt Injection",                  url=_BASE + "llm01-prompt-injection/"),
-    "LLM02": OwaspLlm(id="LLM02", name="Sensitive Information Disclosure",  url=_BASE + "llm02-sensitive-information-disclosure/"),
-    "LLM03": OwaspLlm(id="LLM03", name="Supply Chain",                      url=_BASE + "llm03-supply-chain/"),
-    "LLM04": OwaspLlm(id="LLM04", name="Data and Model Poisoning",          url=_BASE + "llm04-data-and-model-poisoning/"),
-    "LLM05": OwaspLlm(id="LLM05", name="Improper Output Handling",          url=_BASE + "llm05-improper-output-handling/"),
-    "LLM06": OwaspLlm(id="LLM06", name="Excessive Agency",                  url=_BASE + "llm06-excessive-agency/"),
-    "LLM07": OwaspLlm(id="LLM07", name="System Prompt Leakage",             url=_BASE + "llm07-system-prompt-leakage/"),
-    "LLM08": OwaspLlm(id="LLM08", name="Vector and Embedding Weaknesses",   url=_BASE + "llm08-vector-and-embedding-weaknesses/"),
-    "LLM09": OwaspLlm(id="LLM09", name="Misinformation",                    url=_BASE + "llm09-misinformation/"),
-    "LLM10": OwaspLlm(id="LLM10", name="Unbounded Consumption",             url=_BASE + "llm10-unbounded-consumption/"),
+    "LLM02": OwaspLlm(id="LLM02", name="Sensitive Information Disclosure",  url=_BASE + "llm022025-sensitive-information-disclosure/"),
+    "LLM03": OwaspLlm(id="LLM03", name="Supply Chain",                      url=_BASE + "llm032025-supply-chain/"),
+    "LLM04": OwaspLlm(id="LLM04", name="Data and Model Poisoning",          url=_BASE + "llm042025-data-and-model-poisoning/"),
+    "LLM05": OwaspLlm(id="LLM05", name="Improper Output Handling",          url=_BASE + "llm052025-improper-output-handling/"),
+    "LLM06": OwaspLlm(id="LLM06", name="Excessive Agency",                  url=_BASE + "llm062025-excessive-agency/"),
+    "LLM07": OwaspLlm(id="LLM07", name="System Prompt Leakage",             url=_BASE + "llm072025-system-prompt-leakage/"),
+    "LLM08": OwaspLlm(id="LLM08", name="Vector and Embedding Weaknesses",   url=_BASE + "llm082025-vector-and-embedding-weaknesses/"),
+    "LLM09": OwaspLlm(id="LLM09", name="Misinformation",                    url=_BASE + "llm092025-misinformation/"),
+    "LLM10": OwaspLlm(id="LLM10", name="Unbounded Consumption",             url=_BASE + "llm102025-unbounded-consumption/"),
 }
 
 # Map AgentRed test_type → OWASP LLM ID

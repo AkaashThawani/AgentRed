@@ -16,6 +16,7 @@ from .config import HTTP_TIMEOUT_S
 from .events import create_bus, get_bus, get_report, list_reports
 from .models import ScanRequest, ScanResponse
 from .orchestrator import run_scan
+from .storage import query_history
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -70,6 +71,21 @@ async def badge(scan_id: str) -> Response:
         media_type="image/svg+xml",
         headers={"Cache-Control": "public, max-age=60"},
     )
+
+
+@app.get("/history")
+async def history(
+    target_url: str | None = Query(None, description="Filter by specific agent URL"),
+    limit: int = Query(50, ge=1, le=500),
+) -> dict:
+    """Historical trust scores from ClickHouse. Newest first. Persists across backend restarts
+    (unlike /leaderboard which only sees the current process). Empty if ClickHouse not configured."""
+    rows = query_history(target_url=target_url, limit=limit)
+    return {
+        "count": len(rows),
+        "source": "clickhouse",
+        "results": rows,
+    }
 
 
 @app.get("/leaderboard")

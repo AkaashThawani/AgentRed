@@ -6,25 +6,29 @@ import { Button } from '@/components/ui/button'
 import { ScanPhase } from '@/lib/types'
 
 const PHASE_LABEL: Record<ScanPhase, string> = {
-  waiting:    'Initialising',
-  fetching:   'Fetching Agent Card',
-  static:     'Static Analysis',
-  generating: 'Generating Tests',
-  behavioral: 'Behavioral Testing',
-  adaptive:   'Adaptive Probes',
-  report:     'Scan Complete',
-  error:      'Error',
+  waiting:     'Initialising',
+  fetching:    'Fetching Agent Card',
+  static:      'Static Analysis',
+  conformance: 'A2A Spec Conformance',
+  generating:  'Generating Tests',
+  behavioral:  'Behavioral Testing',
+  adaptive:    'Adaptive Probes',
+  report:      'Scan Complete',
+  error:       'Error',
 }
 
+// Single subdued palette — all working phases share the same slate look; only error / report
+// get a distinct accent so terminal states are obvious.
 const PHASE_STYLE: Record<ScanPhase, string> = {
-  waiting:    'text-gray-400   bg-gray-900/50   border-gray-700/40',
-  fetching:   'text-blue-300   bg-blue-900/30   border-blue-700/40',
-  static:     'text-purple-300 bg-purple-900/30 border-purple-700/40',
-  generating: 'text-cyan-300   bg-cyan-900/30   border-cyan-700/40',
-  behavioral: 'text-orange-300 bg-orange-900/30 border-orange-700/40',
-  adaptive:   'text-pink-300   bg-pink-900/30   border-pink-700/40',
-  report:     'text-teal-300   bg-teal-900/30   border-teal-700/40',
-  error:      'text-red-300    bg-red-900/30    border-red-700/40',
+  waiting:     'text-slate-400 bg-slate-900/40 border-slate-700/40',
+  fetching:    'text-slate-300 bg-slate-800/40 border-slate-700/40',
+  static:      'text-slate-300 bg-slate-800/40 border-slate-700/40',
+  conformance: 'text-slate-300 bg-slate-800/40 border-slate-700/40',
+  generating:  'text-slate-300 bg-slate-800/40 border-slate-700/40',
+  behavioral:  'text-slate-300 bg-slate-800/40 border-slate-700/40',
+  adaptive:    'text-slate-300 bg-slate-800/40 border-slate-700/40',
+  report:      'text-emerald-300 bg-emerald-900/20 border-emerald-700/30',
+  error:       'text-red-300 bg-red-900/30 border-red-700/40',
 }
 
 /* ── Progress bar config ── */
@@ -69,17 +73,17 @@ export function ScanCommandBar({
     <motion.div
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="mb-5 bg-black/70 border border-purple-700/30 rounded-xl backdrop-blur-xl overflow-hidden"
+      className="mb-5 bg-black/70 border border-slate-700/30 rounded-xl backdrop-blur-xl overflow-hidden"
     >
       {/* ── Top row ── */}
       <div className="flex flex-wrap items-center gap-3 px-4 py-2.5">
         {/* Target URL */}
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <Globe className="w-3.5 h-3.5 text-purple-400/70 flex-shrink-0" />
+          <Globe className="w-3.5 h-3.5 text-slate-400/70 flex-shrink-0" />
           {targetUrl ? (
             <span className="text-xs text-gray-300 font-mono truncate">{targetUrl}</span>
           ) : (
-            <span className="text-xs text-purple-300/50 font-mono italic">Demo scan</span>
+            <span className="text-xs text-slate-300/50 font-mono italic">Demo scan</span>
           )}
         </div>
 
@@ -104,7 +108,7 @@ export function ScanCommandBar({
             backendStatus === 'online'
               ? 'text-teal-300 bg-teal-900/30 border-teal-700/40'
               : backendStatus === 'mock'
-              ? 'text-purple-300 bg-purple-900/30 border-purple-700/40'
+              ? 'text-slate-300 bg-slate-800/30 border-slate-700/40'
               : 'text-gray-400 bg-gray-900/30 border-gray-700/40'
           }`}
         >
@@ -117,7 +121,7 @@ export function ScanCommandBar({
           onClick={onNewScan}
           size="sm"
           variant="outline"
-          className="border-purple-700/40 hover:bg-purple-900/20 text-purple-300 text-xs h-7 px-2.5"
+          className="border-slate-700/40 hover:bg-slate-800/20 text-slate-300 text-xs h-7 px-2.5"
         >
           <RotateCcw className="w-3 h-3 mr-1" />
           New Scan
@@ -151,7 +155,7 @@ export function ScanCommandBar({
                 </div>
                 <span
                   className={`text-[9px] font-mono leading-tight truncate ${
-                    isActive ? 'text-purple-300' : isDone ? 'text-gray-500' : 'text-gray-700'
+                    isActive ? 'text-slate-300' : isDone ? 'text-gray-500' : 'text-gray-700'
                   }`}
                 >
                   {PROGRESS_LABELS[idx]}

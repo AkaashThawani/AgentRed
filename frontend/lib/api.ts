@@ -46,6 +46,36 @@ export function buildStreamUrl(streamUrl: string): string {
   return streamUrl.startsWith('/') ? `${API_BASE_URL}${streamUrl}` : streamUrl
 }
 
+/** Historical scans from ClickHouse. Returns [] if ClickHouse not configured. */
+export interface HistoryRow {
+  scan_id: string
+  ts: number
+  target_url: string
+  agent_name: string
+  trust_score: number
+  grade: 'TRUSTED' | 'CAUTION' | 'RISKY' | 'DANGEROUS'
+  duration_ms: number
+  critical: number
+  high: number
+  medium: number
+  low: number
+  total_tests: number
+}
+
+export async function fetchHistory(targetUrl?: string, limit = 20): Promise<HistoryRow[]> {
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (targetUrl) params.set('target_url', targetUrl)
+  try {
+    const r = await fetch(`${API_BASE_URL}/history?${params}`)
+    if (!r.ok) return []
+    const data = await r.json()
+    return data.results ?? []
+  } catch {
+    return []
+  }
+}
+
+
 export async function fetchReport(scanId: string): Promise<Report> {
   const response = await fetch(`${API_BASE_URL}/report/${scanId}`)
   if (!response.ok) {

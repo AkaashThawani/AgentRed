@@ -17,7 +17,7 @@ from .enrich import enrich_finding
 from .events import EventBus, save_report
 from .models import Evidence, Finding, Grade, Report, Severity, TestCase
 from .scoring import compute_score, compute_stats
-from .storage import write_finding
+from .storage import write_finding, write_scan_started, write_scan_summary
 from .tools.a2a_client import send_a2a_message
 from .tools.card import fetch_agent_card
 from .tools.card_behavior import generate_card_behavior_finding
@@ -52,6 +52,7 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
 
     try:
         await bus.emit("scan_started", scan_id=bus.scan_id, target_url=target_url)
+        _safe(lambda: write_scan_started(target_url))
 
         # -------- Phase 1: fetch + static --------
         await bus.emit("phase", phase="static", message="Fetching agent card...")
@@ -193,7 +194,9 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
                 log.exception("test failed", exc_info=res)
                 await emit_finding(Finding(
                     phase="behavioral", test_type=t.test_type.value, severity=Severity.LOW,
-                    passed=True, title="Test errored", description=f"{type(res).__name__}: {res}",
+                    passed=True,
+                    title=f"{t.test_type.value.replace('_', ' ').title()} test errored",
+                    description=f"{type(res).__name__}: {res}",
                     recommendation="Retry or investigate harness.",
                     skill_targeted=t.skill_targeted,
                 ))
@@ -221,9 +224,14 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
         if baseline_ok:
             await bus.emit("phase", phase="behavioral", message="Running multi-turn / memory-recall attack...")
             try:
-                mt_findings = await run_multi_turn_test(endpoint, auth_headers, canary)
+                mt_findings = await asyncio.wait_for(
+                    run_multi_turn_test(endpoint, auth_headers, canary),
+                    timeout=30.0,
+                )
                 for f in mt_findings:
                     await emit_finding(f)
+            except asyncio.TimeoutError:
+                log.warning("multi-turn test timed out after 30s — skipping")
             except Exception as e:
                 log.warning("multi-turn test failed: %s", e)
 
@@ -252,7 +260,7 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
             )
 
             fup_results = await asyncio.gather(*(run_one(ft) for ft in followups), return_exceptions=True)
-            for ft, fres in zip(followups, fup_results):
+            for fres in fup_results:
                 if isinstance(fres, Exception):
                     log.exception("followup test failed", exc_info=fres)
                     continue
@@ -260,12 +268,20 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
                 await emit_finding(fup_finding)
 
         # -------- Card-vs-behavior cross-check (meta-judgment) --------
+        # Uses Gemini Pro with a large prompt — can hang. Hard-cap at 30s; if it doesn't
+        # come back, we skip the cross-check and ship the report. Never let one slow LLM
+        # call hold the whole scan hostage.
         await bus.emit("phase", phase="behavioral", message="Cross-checking observed behavior against card claims...")
         try:
             behavioral_findings = [f for f in all_findings if f.phase == "behavioral"]
-            meta_finding = await generate_card_behavior_finding(card, behavioral_findings)
+            meta_finding = await asyncio.wait_for(
+                generate_card_behavior_finding(card, behavioral_findings),
+                timeout=30.0,
+            )
             if meta_finding is not None:
                 await emit_finding(meta_finding)
+        except asyncio.TimeoutError:
+            log.warning("card-vs-behavior cross-check timed out after 30s — skipping")
         except Exception as e:
             log.warning("card-vs-behavior cross-check failed: %s", e)
 
@@ -300,6 +316,13 @@ async def _finalize_report(bus: EventBus, target_url: str, agent_name: str,
         duration_ms=int((time.monotonic() - started) * 1000),
     )
     save_report(bus.scan_id, report.model_dump(mode="json"))
+    # ClickHouse + Datadog scan-level summary (best-effort, never blocks the report)
+    _safe(lambda: write_scan_summary(
+        scan_id=bus.scan_id, target_url=target_url, agent_name=agent_name,
+        trust_score=score, grade=grade.value, duration_ms=report.duration_ms,
+        critical=stats.critical, high=stats.high, medium=stats.medium, low=stats.low,
+        total_tests=stats.total_tests,
+    ))
     await bus.emit("report", report=report.model_dump(mode="json"))
 
 
@@ -371,6 +394,14 @@ def _severity_rank(s: Severity) -> int:
 
 
 def _summarize(agent_name: str, score: int, grade: Grade, stats) -> str:
+    total_failed = stats.critical + stats.high + stats.medium + stats.low
+    if total_failed == 0 and stats.total_tests == 0:
+        # Nothing to test (e.g. behavioral phase short-circuited). Be honest about it.
+        return (
+            f"{agent_name} scored {score}/100 ({grade.value}). "
+            "No behavioral tests ran — the scan returned only static and conformance findings. "
+            "See findings below for what was checked."
+        )
     if grade == Grade.TRUSTED:
         verdict = "passed all critical safety checks"
     elif grade == Grade.CAUTION:
@@ -391,3 +422,11 @@ def _safe_store(scan_id: str, target_url: str, agent_name: str, f: Finding) -> N
         write_finding(scan_id, target_url, agent_name, f)
     except Exception as e:
         log.warning("storage write failed: %s", e)
+
+
+def _safe(fn) -> None:
+    """Generic fire-and-forget wrapper for sponsor-integration calls."""
+    try:
+        fn()
+    except Exception as e:
+        log.warning("sponsor-integration call failed: %s", e)

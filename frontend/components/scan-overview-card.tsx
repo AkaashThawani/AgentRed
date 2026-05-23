@@ -6,23 +6,25 @@ import { Clock, Zap, Bug } from 'lucide-react'
 import { ScanPhase, Finding, TestCase } from '@/lib/types'
 
 const PHASE_LABEL: Record<ScanPhase, string> = {
-  waiting:    'Initialising',
-  fetching:   'Fetching Agent Card',
-  static:     'Static Analysis',
-  generating: 'Generating Tests',
-  behavioral: 'Behavioral Testing',
-  adaptive:   'Adaptive Probes',
-  report:     'Scan Complete',
-  error:      'Error',
+  waiting:     'Initialising',
+  fetching:    'Fetching Agent Card',
+  static:      'Static Analysis',
+  conformance: 'A2A Spec Conformance',
+  generating:  'Generating Tests',
+  behavioral:  'Behavioral Testing',
+  adaptive:    'Adaptive Probes',
+  report:      'Scan Complete',
+  error:       'Error',
 }
 
 const PHASE_DEFAULT_MSG: Partial<Record<ScanPhase, string>> = {
-  waiting:    'Waiting to begin…',
-  fetching:   'Retrieving and validating the agent card',
-  static:     'Analysing card metadata, auth schemes, and capabilities',
-  generating: 'Building targeted behavioural test cases',
-  behavioral: 'Running probes against the live agent',
-  adaptive:   'Following up on suspicious findings with deeper probes',
+  waiting:     'Waiting to begin…',
+  fetching:    'Retrieving and validating the agent card',
+  static:      'Analysing card metadata, auth schemes, and capabilities',
+  conformance: 'Checking card against the A2A v0.3 spec',
+  generating:  'Building targeted behavioural test cases',
+  behavioral:  'Running probes against the live agent',
+  adaptive:    'Following up on suspicious findings with deeper probes',
   report:     'Results consolidated into the final trust report',
   error:      'An error occurred during the scan',
 }
@@ -77,7 +79,7 @@ export function ScanOverviewCard({
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-black/50 border border-purple-700/40 rounded-xl p-4 backdrop-blur-sm space-y-3"
+      className="bg-black/50 border border-slate-700/40 rounded-xl p-4 backdrop-blur-sm space-y-3"
     >
       {/* ── Phase header ── */}
       <div className="flex items-start justify-between gap-2">
@@ -90,7 +92,7 @@ export function ScanOverviewCard({
                 className="w-1.5 h-1.5 rounded-full bg-purple-400 flex-shrink-0"
               />
             )}
-            <span className="text-xs font-mono font-semibold text-purple-300 uppercase tracking-wider">
+            <span className="text-xs font-mono font-semibold text-slate-300 uppercase tracking-wider">
               {PHASE_LABEL[phase]}
             </span>
           </div>
@@ -101,7 +103,7 @@ export function ScanOverviewCard({
 
         {/* Duration timer */}
         <div className="flex items-center gap-1 text-xs text-gray-500 font-mono flex-shrink-0 mt-0.5">
-          <Clock className="w-3 h-3 text-purple-400/50" />
+          <Clock className="w-3 h-3 text-slate-400/50" />
           <span>{durationStr}</span>
         </div>
       </div>
@@ -111,7 +113,7 @@ export function ScanOverviewCard({
         {/* Findings tile */}
         <div className="bg-white/[0.03] border border-white/[0.05] rounded-lg px-3 py-2">
           <div className="flex items-center gap-1 mb-1">
-            <Bug className="w-3 h-3 text-purple-400/60" />
+            <Bug className="w-3 h-3 text-slate-400/60" />
             <span className="text-xs text-gray-500">Findings</span>
           </div>
           <div className="text-xl font-bold text-white leading-none mb-1">{totalFindings}</div>
@@ -133,14 +135,15 @@ export function ScanOverviewCard({
           )}
         </div>
 
-        {/* Tests tile */}
+        {/* Behavioral tests tile — label clarified so a 0 count doesn't read as
+            "the scan did nothing" when behavioral was skipped (e.g. endpoint 404) */}
         <div className="bg-white/[0.03] border border-white/[0.05] rounded-lg px-3 py-2">
           <div className="flex items-center gap-1 mb-1">
             <Zap className="w-3 h-3 text-orange-400/60" />
-            <span className="text-xs text-gray-500">Tests</span>
+            <span className="text-xs text-gray-500">Behavioral Tests</span>
           </div>
           <div className="text-xl font-bold text-white leading-none mb-1">{testsTotal}</div>
-          {testsRunning > 0 && (
+          {testsRunning > 0 ? (
             <div className="flex items-center gap-1">
               <motion.div
                 animate={{ opacity: [1, 0.4, 1] }}
@@ -149,14 +152,16 @@ export function ScanOverviewCard({
               />
               <span className="text-xs text-yellow-400/80 font-mono">{testsRunning} live</span>
             </div>
-          )}
+          ) : testsTotal === 0 && phase !== 'waiting' && phase !== 'fetching' && phase !== 'static' && phase !== 'conformance' ? (
+            <span className="text-xs text-gray-500 italic">skipped</span>
+          ) : null}
         </div>
       </div>
 
       {/* ── Risk breakdown bars (only when we have findings) ── */}
       {totalFindings > 0 && (
         <div className="pt-1 space-y-1.5">
-          <div className="text-[10px] font-mono text-purple-400/40 uppercase tracking-widest">
+          <div className="text-[10px] font-mono text-slate-400/40 uppercase tracking-widest">
             Risk Breakdown
           </div>
           {(
