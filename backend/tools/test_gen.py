@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, TypeAdapter
 
-from ..config import TESTS_PER_SKILL
+from ..config import MAX_TOTAL_TESTS, TESTS_PER_SKILL
 from ..models import Severity, TestCase, TestType
 from .gemini import generate_json
 
@@ -125,18 +125,24 @@ Agent card (for context):
 async def generate_test_cases(card: dict[str, Any], canary: str,
                               n: int | None = None) -> list[TestCase]:
     """Generate adversarial tests. If the agent declares skills, generate per-skill
-    so coverage scales with declared surface. Falls back to a single global batch
-    if no skills are declared."""
+    so coverage scales with declared surface — but cap total tests at MAX_TOTAL_TESTS
+    so multi-skill agents don't produce a 300-event scan."""
     skills = card.get("skills") or []
-    per_skill_n = n or TESTS_PER_SKILL
+
+    # Compute per-skill budget that respects the global cap.
     if not skills:
+        per_skill_n = n or TESTS_PER_SKILL
         raw = await generate_json(
             _build_prompt(card, canary, per_skill_n),
             response_schema=list[_LLMTest],
             system_instruction=_SYSTEM,
         )
         parsed = TypeAdapter(list[_LLMTest]).validate_json(raw)
-        return [TestCase(**t.model_dump()) for t in parsed]
+        return [TestCase(**t.model_dump()) for t in parsed][:MAX_TOTAL_TESTS]
+
+    # Distribute MAX_TOTAL_TESTS across declared skills (min 2 per skill, max TESTS_PER_SKILL).
+    requested = n or TESTS_PER_SKILL
+    per_skill_n = max(2, min(requested, MAX_TOTAL_TESTS // max(1, len(skills))))
 
     import asyncio
     async def gen_for_skill(skill: dict[str, Any]) -> list[TestCase]:
@@ -153,7 +159,8 @@ async def generate_test_cases(card: dict[str, Any], canary: str,
     for b in batches:
         if isinstance(b, list):
             out.extend(b)
-    return out
+    # Hard cap in case LLM returned more than requested
+    return out[:MAX_TOTAL_TESTS]
 
 
 async def generate_followup_tests(card: dict[str, Any], parent_finding_summary: str,

@@ -40,5 +40,6 @@ DATADOG_SITE: str = _optional("DATADOG_SITE", "datadoghq.com")
 # Scan tunables
 HTTP_TIMEOUT_S: float = float(_optional("HTTP_TIMEOUT_S", "20"))
 MAX_CONCURRENT_TESTS: int = int(_optional("MAX_CONCURRENT_TESTS", "3"))
-TESTS_PER_SKILL: int = int(_optional("TESTS_PER_SKILL", "7"))
-ADAPTIVE_FOLLOWUP_COUNT: int = int(_optional("ADAPTIVE_FOLLOWUP_COUNT", "3"))
+TESTS_PER_SKILL: int = int(_optional("TESTS_PER_SKILL", "5"))
+MAX_TOTAL_TESTS: int = int(_optional("MAX_TOTAL_TESTS", "20"))   # cap regardless of skill count
+ADAPTIVE_FOLLOWUP_COUNT: int = int(_optional("ADAPTIVE_FOLLOWUP_COUNT", "2"))

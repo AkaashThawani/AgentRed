@@ -88,6 +88,7 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
             log.warning("rpc probe failed: %s", e)
 
         # -------- Card-vs-reality probe --------
+        endpoint_blocked_status: int | None = None  # set if probe shows endpoint can't be reached
         try:
             probe = await send_a2a_message(endpoint, "ping", extra_headers=auth_headers)
             probe_status = probe.get("status_code")
@@ -118,10 +119,24 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
                     evidence=Evidence(request=f"POST {endpoint}", highlight=f"HTTP {probe_status}"),
                     recommendation="Fix the endpoint URL in the card, or implement A2A JSON-RPC at the declared URL.",
                 ))
+                endpoint_blocked_status = probe_status
+            elif probe_status is None or (probe_status and probe_status >= 500):
+                endpoint_blocked_status = probe_status
         except Exception as e:
             log.warning("endpoint probe failed: %s", e)
+            endpoint_blocked_status = None  # treat as unreachable
 
         # -------- Phase 2: behavioral --------
+        # If we already know the endpoint is unreachable (we already emitted
+        # `card_endpoint_unreachable` HIGH above), short-circuit. No duplicate meta-finding —
+        # the static finding already conveys what the user needs to know.
+        if endpoint_blocked_status is not None:
+            await bus.emit("phase", phase="behavioral",
+                           message=f"Behavioral phase skipped — endpoint returned HTTP {endpoint_blocked_status}.")
+            await _finalize_report(bus, target_url, agent_name, card, all_findings, started)
+            return
+
+        # Baseline first — sets "normal" behavior context
         await bus.emit("phase", phase="behavioral", message="Running baseline in-scope request...")
         try:
             baseline_finding, _ = await probe_baseline(endpoint, auth_headers, card.get("skills") or [])
@@ -172,7 +187,7 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
         results = await asyncio.gather(*(run_one(t) for t in tests), return_exceptions=True)
         triggered_pairs: list[tuple[Finding, TestCase, str]] = []
         blocked_status_count: dict[int, int] = {}
-        behavioral_findings_emitted = 0
+        behavioral_findings_attempted = 0
         for t, res in zip(tests, results):
             if isinstance(res, Exception):
                 log.exception("test failed", exc_info=res)
@@ -184,17 +199,21 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
                 ))
                 continue
             finding, status = res
+            behavioral_findings_attempted += 1
             if status is None or status < 200 or status >= 300:
+                # Don't emit per-test blocked findings — they are 100% noise. Just count them
+                # and we'll emit ONE meta-finding below.
                 blocked_status_count[status or 0] = blocked_status_count.get(status or 0, 0) + 1
-            behavioral_findings_emitted += 1
+                continue
             await emit_finding(finding)
             if not finding.passed and finding.severity in _TRIGGER_SEVERITIES:
                 triggered_pairs.append((finding, t, finding.evidence.response or ""))
 
         blocked_total = sum(blocked_status_count.values())
-        if behavioral_findings_emitted > 0 and blocked_total / behavioral_findings_emitted >= 0.7:
+        if blocked_total > 0:
+            # Emit a single meta finding summarizing how many were blocked + the primary status.
             primary_status = max(blocked_status_count.items(), key=lambda kv: kv[1])[0]
-            await emit_finding(_make_blocked_meta(blocked_total, behavioral_findings_emitted, primary_status))
+            await emit_finding(_make_blocked_meta(blocked_total, behavioral_findings_attempted, primary_status))
 
         # -------- Multi-turn stateful attack --------
         # Only worth running if the baseline worked (i.e. the agent is actually reachable).
@@ -251,30 +270,37 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
             log.warning("card-vs-behavior cross-check failed: %s", e)
 
         # -------- Report --------
-        await bus.emit("phase", phase="report", message="Computing trust score...")
-        score, grade = compute_score(all_findings)
-        stats = compute_stats(all_findings)
-        all_findings.sort(key=lambda f: (
-            -_severity_rank(f.severity), 0 if f.phase == "static" else 1, f.ts
-        ))
-        report = Report(
-            scan_id=bus.scan_id,
-            target_url=target_url,
-            agent_name=agent_name,
-            trust_score=score,
-            grade=grade,
-            summary=_summarize(agent_name, score, grade, stats),
-            card=card,
-            findings=all_findings,
-            stats=stats,
-            duration_ms=int((time.monotonic() - started) * 1000),
-        )
-        save_report(bus.scan_id, report.model_dump(mode="json"))
-        await bus.emit("report", report=report.model_dump(mode="json"))
+        await _finalize_report(bus, target_url, agent_name, card, all_findings, started)
 
     except Exception as e:
         log.exception("scan crashed")
         await bus.emit("error", message=f"Scan failed: {type(e).__name__}: {e}")
+
+
+async def _finalize_report(bus: EventBus, target_url: str, agent_name: str,
+                           card: dict[str, Any], all_findings: list[Finding], started: float) -> None:
+    """Compute trust score, build the Report, save and emit it. Used both at the normal end of a scan
+    and on the early-return path when behavioral scanning was skipped."""
+    await bus.emit("phase", phase="report", message="Computing trust score...")
+    score, grade = compute_score(all_findings)
+    stats = compute_stats(all_findings)
+    all_findings.sort(key=lambda f: (
+        -_severity_rank(f.severity), 0 if f.phase == "static" else 1, f.ts
+    ))
+    report = Report(
+        scan_id=bus.scan_id,
+        target_url=target_url,
+        agent_name=agent_name,
+        trust_score=score,
+        grade=grade,
+        summary=_summarize(agent_name, score, grade, stats),
+        card=card,
+        findings=all_findings,
+        stats=stats,
+        duration_ms=int((time.monotonic() - started) * 1000),
+    )
+    save_report(bus.scan_id, report.model_dump(mode="json"))
+    await bus.emit("report", report=report.model_dump(mode="json"))
 
 
 def _extract_jsonrpc_endpoint(card: dict[str, Any]) -> str | None:
@@ -298,38 +324,36 @@ def _blocked_reason(status: int | None) -> str:
 
 
 def _make_blocked_meta(blocked: int, total: int, primary_status: int | None) -> Finding:
+    """Status-only meta-finding (passed=True, LOW severity) explaining that the behavioral
+    phase could not complete normally. We deliberately do NOT mark this as a vulnerability —
+    the real issue (broken endpoint / required auth) is captured by a different finding
+    (`card_endpoint_unreachable` or by the user's awareness of the auth requirement)."""
     reason = _blocked_reason(primary_status)
     if primary_status in (401, 403):
         title = "Behavioral scan blocked — target requires authentication"
-        sev = Severity.MEDIUM
         rec = "Re-run with credentials via `auth_headers`, or confirm this surface is meant to be locked down."
     elif primary_status == 405:
-        title = "Behavioral scan blocked — endpoint declared in card rejects POST"
-        sev = Severity.HIGH
-        rec = "Either the card's `url`/`interfaces[].url` is wrong, or the endpoint doesn't implement A2A JSON-RPC."
+        title = "Behavioral scan blocked — endpoint rejects POST"
+        rec = "See the `card_endpoint_unreachable` finding for the underlying issue."
     elif primary_status == 404:
         title = "Behavioral scan blocked — endpoint URL returns 404"
-        sev = Severity.HIGH
-        rec = "Fix the endpoint URL in the agent card."
+        rec = "See the `card_endpoint_unreachable` finding for the underlying issue."
     elif primary_status == 429:
         title = "Behavioral scan blocked — target rate-limited the scanner"
-        sev = Severity.LOW
         rec = "Retry with lower concurrency or after a backoff."
     elif primary_status and 500 <= primary_status < 600:
         title = f"Behavioral scan blocked — target returns {primary_status}"
-        sev = Severity.MEDIUM
         rec = "Target appears broken. Confirm the agent endpoint is healthy before re-scanning."
     else:
         title = "Behavioral scan blocked at HTTP layer"
-        sev = Severity.MEDIUM
         rec = "Resolve the transport-level error to enable behavioral scanning."
     return Finding(
         phase="behavioral", test_type="scan_blocked_by_http_error",
-        severity=sev, passed=False, title=title,
+        severity=Severity.LOW, passed=True, title=title,
         description=(
             f"{blocked}/{total} behavioral requests were rejected ({reason}, status {primary_status}). "
-            "Exploits never reached the agent's logic; the per-test results below are not vulnerability "
-            "signals — they reflect that the call never executed."
+            "This is a SCAN STATUS, not a vulnerability — the actual issue is captured by a related "
+            "static finding. The per-test results below are not vulnerability signals."
         ),
         evidence=Evidence(highlight=f"HTTP {primary_status} on {blocked}/{total} requests"),
         recommendation=rec,
