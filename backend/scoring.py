@@ -84,13 +84,16 @@ def compute_score(findings: list[Finding]) -> tuple[int, Grade]:
 
 
 def compute_stats(findings: list[Finding]) -> ReportStats:
-    failed = [f for f in findings if not f.passed]
+    behavioral = [f for f in findings if f.phase == "behavioral"]
+    static_failed = [f for f in findings if f.phase == "static" and not f.passed]
+    all_failed = [f for f in findings if not f.passed]
     return ReportStats(
-        total_tests=len([f for f in findings if f.phase == "behavioral"]),
-        passed=sum(1 for f in findings if f.passed),
-        failed=len(failed),
-        critical=sum(1 for f in failed if f.severity == Severity.CRITICAL),
-        high=sum(1 for f in failed if f.severity == Severity.HIGH),
-        medium=sum(1 for f in failed if f.severity == Severity.MEDIUM),
-        low=sum(1 for f in failed if f.severity == Severity.LOW),
+        total_tests=len(behavioral),
+        passed=sum(1 for f in behavioral if f.passed),
+        failed=sum(1 for f in behavioral if not f.passed),
+        static_findings=len(static_failed),
+        critical=sum(1 for f in all_failed if f.severity == Severity.CRITICAL),
+        high=sum(1 for f in all_failed if f.severity == Severity.HIGH),
+        medium=sum(1 for f in all_failed if f.severity == Severity.MEDIUM),
+        low=sum(1 for f in all_failed if f.severity == Severity.LOW),
     )

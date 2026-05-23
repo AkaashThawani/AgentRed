@@ -79,18 +79,23 @@ export function openScanStream(
     eventSource.close()
   })
 
-  // Named SSE error event sent by the backend (event: error)
+  // Backend "error" SSE event (named, with JSON payload). Distinct from EventSource's
+  // built-in transport error which has no data and fires on close/network failure.
   eventSource.addEventListener('error', (event: MessageEvent) => {
-    completed = true
-    try {
-      onEvent('error', JSON.parse(event.data))
-    } catch {
-      onError(new Error('Malformed error event data'))
+    if (event.data) {
+      completed = true
+      try {
+        onEvent('error', JSON.parse(event.data))
+      } catch {
+        onError(new Error('Malformed error event data'))
+      }
+      eventSource.close()
     }
-    eventSource.close()
   })
 
-  // Network / connection-level error — ignore if scan already completed
+  // Network / connection-level error — ignore if scan already completed normally.
+  // EventSource also fires onerror when the server closes the stream after sending
+  // the final report, so we must not treat that as a failure.
   eventSource.onerror = () => {
     if (!completed) {
       onError(new Error('Stream connection failed'))

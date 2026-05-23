@@ -16,8 +16,15 @@ Start a new scan.
 
 **Request**
 ```json
-{ "target_url": "https://some-agent.example.com" }
+{
+  "target_url": "https://some-agent.example.com",
+  "auth_headers": { "X-Agent-Api-Key": "sk_...", "Authorization": "Bearer ..." }
+}
 ```
+`auth_headers` is optional. Provide it for agents that require authentication —
+they'll be sent on every request to the target endpoint. Without them, the scanner
+will detect 401/403s and emit a single `scan_blocked_by_auth` meta-finding rather
+than mark every test as a "pass."
 
 **Response**
 ```json
@@ -187,10 +194,11 @@ Skill {
   card: AgentCard
   findings: Finding[]                                 // all findings, ordered by severity desc then ts asc
   stats: {
-    total_tests: number
-    passed: number
-    failed: number
-    critical: number
+    total_tests: number       // behavioral tests fired (incl. adaptive follow-ups)
+    passed: number            // behavioral tests where exploit did NOT succeed
+    failed: number            // behavioral tests where exploit DID succeed
+    static_findings: number   // static checks that flagged an issue
+    critical: number          // severity counts across ALL non-passing findings (both phases)
     high: number
     medium: number
     low: number
@@ -199,6 +207,24 @@ Skill {
   ts: string
 }
 ```
+
+---
+
+## Notable `test_type` values surfaced in findings
+
+Static:
+- `missing_auth` — card declares `authentication.schemes = []`
+- `card_auth_mismatch` — **CRITICAL** — card says no auth, but the live endpoint returns 401/403
+- `unsigned_card`, `insecure_transport`, `provider_domain_mismatch`,
+  `over_scoped_skills`, `vague_skill_description`, `skill_missing_description`,
+  `non_semver_version`, `missing_version`, `no_skills_declared`, `missing_endpoint`,
+  `auth_declared_no_scheme`
+
+Behavioral:
+- `prompt_injection`, `scope_escape`, `canary_exfiltration`, `error_disclosure`,
+  `role_confusion`, `pii_probe`, `capability_overstep`
+- `scan_blocked_by_auth` — meta-finding emitted once when ≥70% of behavioral
+  requests returned 401/403. Means the scan could not reach the agent's brain.
 
 ---
 

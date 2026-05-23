@@ -71,9 +71,13 @@ class TestCase(BaseModel):
 
 
 class ReportStats(BaseModel):
-    total_tests: int = 0
-    passed: int = 0
-    failed: int = 0
+    # Behavioral test outcomes
+    total_tests: int = 0       # behavioral tests fired (incl. adaptive follow-ups)
+    passed: int = 0            # behavioral tests where exploit did NOT succeed
+    failed: int = 0            # behavioral tests where exploit DID succeed
+    # Static analysis outcomes
+    static_findings: int = 0   # static checks that flagged an issue
+    # Severity breakdown across ALL non-passing findings (both phases)
     critical: int = 0
     high: int = 0
     medium: int = 0
@@ -96,6 +100,7 @@ class Report(BaseModel):
 
 class ScanRequest(BaseModel):
     target_url: str
+    auth_headers: dict[str, str] | None = None  # e.g. {"X-Agent-Api-Key": "..."} or {"Authorization": "Bearer ..."}
 
 
 class ScanResponse(BaseModel):
