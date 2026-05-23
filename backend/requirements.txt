@@ -9,3 +9,4 @@ anthropic>=0.39.0
 clickhouse-connect>=0.8.0
 datadog>=0.50.0
 python-dotenv>=1.0.0
+cryptography>=42.0.0

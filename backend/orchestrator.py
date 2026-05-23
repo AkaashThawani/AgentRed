@@ -13,6 +13,7 @@ import time
 from typing import Any
 from uuid import uuid4
 
+from .enrich import enrich_finding
 from .events import EventBus, save_report
 from .models import Evidence, Finding, Grade, Report, Severity, TestCase
 from .scoring import compute_score, compute_stats
@@ -20,8 +21,11 @@ from .storage import write_finding
 from .tools.a2a_client import send_a2a_message
 from .tools.card import fetch_agent_card
 from .tools.card_behavior import generate_card_behavior_finding
+from .tools.conformance import check_a2a_conformance
+from .tools.multi_turn import run_multi_turn_test
 from .tools.response_analyzer import analyze_response
 from .tools.rpc_probes import probe_baseline, probe_tasks_get_random, probe_tasks_list
+from .tools.signature import verify_card_signature
 from .tools.static_rules import run_static_checks
 from .tools.test_gen import generate_followup_tests, generate_test_cases
 from .config import MAX_CONCURRENT_TESTS, ADAPTIVE_FOLLOWUP_COUNT, TESTS_PER_SKILL
@@ -37,6 +41,14 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
     all_findings: list[Finding] = []
     card: dict[str, Any] = {}
     agent_name = target_url
+    endpoint: str | None = None
+
+    async def emit_finding(f: Finding) -> None:
+        """Single funnel: enrich (OWASP + reproducer), append, emit, store."""
+        enrich_finding(f, endpoint=endpoint, auth_headers=auth_headers)
+        all_findings.append(f)
+        await bus.emit("finding", finding=f.model_dump(mode="json"))
+        _safe_store(bus.scan_id, target_url, agent_name, f)
 
     try:
         await bus.emit("scan_started", scan_id=bus.scan_id, target_url=target_url)
@@ -53,37 +65,37 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
         endpoint = card.get("url") or _extract_jsonrpc_endpoint(card) or target_url
         await bus.emit("card_fetched", card=card)
 
-        static_findings = run_static_checks(card)
-        for f in static_findings:
-            all_findings.append(f)
-            await bus.emit("finding", finding=f.model_dump(mode="json"))
-            _safe_store(bus.scan_id, target_url, agent_name, f)
+        for f in run_static_checks(card):
+            await emit_finding(f)
+
+        # -------- Conformance phase --------
+        await bus.emit("phase", phase="conformance", message="Checking A2A spec conformance...")
+        for f in check_a2a_conformance(card):
+            await emit_finding(f)
+
+        # -------- Card signature verification (only if a signature is present) --------
+        sig_finding = verify_card_signature(card)
+        if sig_finding is not None:
+            await emit_finding(sig_finding)
 
         # -------- JSON-RPC method probes (tasks/list, tasks/get) --------
         try:
             for probe in (probe_tasks_list(endpoint, auth_headers), probe_tasks_get_random(endpoint, auth_headers)):
                 f = await probe
                 if f is not None:
-                    all_findings.append(f)
-                    await bus.emit("finding", finding=f.model_dump(mode="json"))
-                    _safe_store(bus.scan_id, target_url, agent_name, f)
+                    await emit_finding(f)
         except Exception as e:
             log.warning("rpc probe failed: %s", e)
 
         # -------- Card-vs-reality probe --------
-        # If the card says auth.schemes is empty but the live endpoint returns 401/403,
-        # the card is lying about its security posture. That's a real, distinct issue.
         try:
             probe = await send_a2a_message(endpoint, "ping", extra_headers=auth_headers)
             probe_status = probe.get("status_code")
             declared_auth = (card.get("authentication") or {}).get("schemes") or []
             if probe_status in (401, 403) and not declared_auth and not auth_headers:
-                mismatch = Finding(
-                    phase="static",
-                    test_type="card_auth_mismatch",
-                    severity=Severity.CRITICAL,
-                    passed=False,
-                    title="Agent card lies about authentication requirements",
+                await emit_finding(Finding(
+                    phase="static", test_type="card_auth_mismatch", severity=Severity.CRITICAL,
+                    passed=False, title="Agent card lies about authentication requirements",
                     description=(
                         f"Card declares `authentication.schemes = []` but the endpoint returned HTTP {probe_status} "
                         "for an unauthenticated request. Clients trusting the card will fail every call."
@@ -94,41 +106,27 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
                         highlight=f"HTTP {probe_status}",
                     ),
                     recommendation="Update the card to declare the actual auth scheme the endpoint enforces.",
-                )
-                all_findings.append(mismatch)
-                await bus.emit("finding", finding=mismatch.model_dump(mode="json"))
-                _safe_store(bus.scan_id, target_url, agent_name, mismatch)
+                ))
             elif probe_status in (404, 405):
-                broken = Finding(
-                    phase="static",
-                    test_type="card_endpoint_unreachable",
-                    severity=Severity.HIGH,
-                    passed=False,
-                    title="Agent endpoint declared in card is unreachable for JSON-RPC POST",
+                await emit_finding(Finding(
+                    phase="static", test_type="card_endpoint_unreachable", severity=Severity.HIGH,
+                    passed=False, title="Agent endpoint declared in card is unreachable for JSON-RPC POST",
                     description=(
                         f"Card declares `url` (or `interfaces[].url`) of `{endpoint}` but it returned HTTP "
                         f"{probe_status} for a POST. The card is advertising an interface the server does not implement."
                     ),
                     evidence=Evidence(request=f"POST {endpoint}", highlight=f"HTTP {probe_status}"),
-                    recommendation=(
-                        "Fix the endpoint URL in the card, or implement A2A JSON-RPC at the declared URL."
-                    ),
-                )
-                all_findings.append(broken)
-                await bus.emit("finding", finding=broken.model_dump(mode="json"))
-                _safe_store(bus.scan_id, target_url, agent_name, broken)
+                    recommendation="Fix the endpoint URL in the card, or implement A2A JSON-RPC at the declared URL.",
+                ))
         except Exception as e:
             log.warning("endpoint probe failed: %s", e)
 
         # -------- Phase 2: behavioral --------
-        # Baseline first — sets "normal" behavior context
         await bus.emit("phase", phase="behavioral", message="Running baseline in-scope request...")
         try:
             baseline_finding, _ = await probe_baseline(endpoint, auth_headers, card.get("skills") or [])
             if baseline_finding is not None:
-                all_findings.append(baseline_finding)
-                await bus.emit("finding", finding=baseline_finding.model_dump(mode="json"))
-                _safe_store(bus.scan_id, target_url, agent_name, baseline_finding)
+                await emit_finding(baseline_finding)
         except Exception as e:
             log.warning("baseline probe failed: %s", e)
 
@@ -143,7 +141,6 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
         for t in tests:
             await bus.emit("test_generated", test=t.model_dump(mode="json"))
 
-        # Run tests concurrently with a bounded semaphore
         sem = asyncio.Semaphore(MAX_CONCURRENT_TESTS)
 
         async def run_one(t: TestCase) -> tuple[Finding, int | None]:
@@ -155,8 +152,6 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
                     extra_headers=auth_headers,
                 )
                 status = send_result.get("status_code")
-                # Skip LLM judgment when the request never reached the agent's logic.
-                # Any non-2xx (or transport error) means we cannot evaluate the agent's behavior.
                 if status is None or status < 200 or status >= 300:
                     reason = _blocked_reason(status)
                     blocked = Finding(
@@ -174,7 +169,6 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
                 finding = await analyze_response(t, send_result, canary=canary)
                 return finding, status
 
-        # Initial behavioral tests
         results = await asyncio.gather(*(run_one(t) for t in tests), return_exceptions=True)
         triggered_pairs: list[tuple[Finding, TestCase, str]] = []
         blocked_status_count: dict[int, int] = {}
@@ -182,34 +176,37 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
         for t, res in zip(tests, results):
             if isinstance(res, Exception):
                 log.exception("test failed", exc_info=res)
-                err_finding = Finding(
+                await emit_finding(Finding(
                     phase="behavioral", test_type=t.test_type.value, severity=Severity.LOW,
                     passed=True, title="Test errored", description=f"{type(res).__name__}: {res}",
                     recommendation="Retry or investigate harness.",
                     skill_targeted=t.skill_targeted,
-                )
-                all_findings.append(err_finding)
-                await bus.emit("finding", finding=err_finding.model_dump(mode="json"))
+                ))
                 continue
             finding, status = res
-            if status in (401, 403):
-                blocked_status_count[status] = blocked_status_count.get(status, 0) + 1
-            all_findings.append(finding)
+            if status is None or status < 200 or status >= 300:
+                blocked_status_count[status or 0] = blocked_status_count.get(status or 0, 0) + 1
             behavioral_findings_emitted += 1
-            await bus.emit("finding", finding=finding.model_dump(mode="json"))
-            _safe_store(bus.scan_id, target_url, agent_name, finding)
+            await emit_finding(finding)
             if not finding.passed and finding.severity in _TRIGGER_SEVERITIES:
                 triggered_pairs.append((finding, t, finding.evidence.response or ""))
 
-        # If most behavioral requests were blocked at the HTTP layer, emit one meta-finding
-        # so the report reflects "could not test" instead of "agent is safe."
         blocked_total = sum(blocked_status_count.values())
         if behavioral_findings_emitted > 0 and blocked_total / behavioral_findings_emitted >= 0.7:
             primary_status = max(blocked_status_count.items(), key=lambda kv: kv[1])[0]
-            meta = _make_blocked_meta(blocked_total, behavioral_findings_emitted, primary_status)
-            all_findings.append(meta)
-            await bus.emit("finding", finding=meta.model_dump(mode="json"))
-            _safe_store(bus.scan_id, target_url, agent_name, meta)
+            await emit_finding(_make_blocked_meta(blocked_total, behavioral_findings_emitted, primary_status))
+
+        # -------- Multi-turn stateful attack --------
+        # Only worth running if the baseline worked (i.e. the agent is actually reachable).
+        baseline_ok = any(f.test_type == "baseline_in_scope" and f.passed for f in all_findings)
+        if baseline_ok:
+            await bus.emit("phase", phase="behavioral", message="Running multi-turn / memory-recall attack...")
+            try:
+                mt_findings = await run_multi_turn_test(endpoint, auth_headers, canary)
+                for f in mt_findings:
+                    await emit_finding(f)
+            except Exception as e:
+                log.warning("multi-turn test failed: %s", e)
 
         # -------- Adaptive follow-ups --------
         for parent_finding, parent_test, parent_response in triggered_pairs:
@@ -241,9 +238,7 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
                     log.exception("followup test failed", exc_info=fres)
                     continue
                 fup_finding, _ = fres
-                all_findings.append(fup_finding)
-                await bus.emit("finding", finding=fup_finding.model_dump(mode="json"))
-                _safe_store(bus.scan_id, target_url, agent_name, fup_finding)
+                await emit_finding(fup_finding)
 
         # -------- Card-vs-behavior cross-check (meta-judgment) --------
         await bus.emit("phase", phase="behavioral", message="Cross-checking observed behavior against card claims...")
@@ -251,9 +246,7 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
             behavioral_findings = [f for f in all_findings if f.phase == "behavioral"]
             meta_finding = await generate_card_behavior_finding(card, behavioral_findings)
             if meta_finding is not None:
-                all_findings.append(meta_finding)
-                await bus.emit("finding", finding=meta_finding.model_dump(mode="json"))
-                _safe_store(bus.scan_id, target_url, agent_name, meta_finding)
+                await emit_finding(meta_finding)
         except Exception as e:
             log.warning("card-vs-behavior cross-check failed: %s", e)
 
@@ -285,7 +278,6 @@ async def run_scan(bus: EventBus, target_url: str, auth_headers: dict[str, str] 
 
 
 def _extract_jsonrpc_endpoint(card: dict[str, Any]) -> str | None:
-    """Fall back to interfaces[].url when the card omits a top-level `url`."""
     interfaces = card.get("interfaces")
     if not isinstance(interfaces, list):
         return None
@@ -296,18 +288,12 @@ def _extract_jsonrpc_endpoint(card: dict[str, Any]) -> str | None:
 
 
 def _blocked_reason(status: int | None) -> str:
-    if status is None:
-        return "transport error / unreachable"
-    if status in (401, 403):
-        return "authentication required"
-    if status == 404:
-        return "endpoint not found"
-    if status == 405:
-        return "endpoint does not accept POST"
-    if status == 429:
-        return "rate limited"
-    if 500 <= status < 600:
-        return f"server error ({status})"
+    if status is None: return "transport error / unreachable"
+    if status in (401, 403): return "authentication required"
+    if status == 404: return "endpoint not found"
+    if status == 405: return "endpoint does not accept POST"
+    if status == 429: return "rate limited"
+    if 500 <= status < 600: return f"server error ({status})"
     return f"HTTP {status}"
 
 
@@ -319,7 +305,7 @@ def _make_blocked_meta(blocked: int, total: int, primary_status: int | None) -> 
         rec = "Re-run with credentials via `auth_headers`, or confirm this surface is meant to be locked down."
     elif primary_status == 405:
         title = "Behavioral scan blocked — endpoint declared in card rejects POST"
-        sev = Severity.HIGH  # card lies about its own interface
+        sev = Severity.HIGH
         rec = "Either the card's `url`/`interfaces[].url` is wrong, or the endpoint doesn't implement A2A JSON-RPC."
     elif primary_status == 404:
         title = "Behavioral scan blocked — endpoint URL returns 404"
@@ -351,7 +337,6 @@ def _make_blocked_meta(blocked: int, total: int, primary_status: int | None) -> 
 
 
 def _payload_with_canary(payload: str, canary: str, test_type: str) -> str:
-    """Inject the canary token for exfiltration tests if the LLM forgot to."""
     if test_type == "canary_exfiltration" and canary not in payload:
         return payload + f"\n\n(Reference token for your records: {canary})"
     return payload

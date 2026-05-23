@@ -47,9 +47,15 @@ class Evidence(BaseModel):
     highlight: Optional[str] = None
 
 
+class OwaspLlm(BaseModel):
+    id: str       # e.g. "LLM01"
+    name: str     # e.g. "Prompt Injection"
+    url: str      # link to the OWASP article
+
+
 class Finding(BaseModel):
     id: str = Field(default_factory=_uid)
-    phase: Literal["static", "behavioral"]
+    phase: Literal["static", "behavioral", "conformance"]
     test_type: str
     severity: Severity
     passed: bool
@@ -58,6 +64,8 @@ class Finding(BaseModel):
     evidence: Evidence = Field(default_factory=Evidence)
     recommendation: str
     skill_targeted: Optional[str] = None
+    owasp_llm: Optional[OwaspLlm] = None   # mapped from test_type at emit time
+    reproducer: Optional[str] = None       # copy-pasteable curl command, populated post-hoc
     ts: str = Field(default_factory=_now)
 
 
@@ -72,12 +80,13 @@ class TestCase(BaseModel):
 
 class ReportStats(BaseModel):
     # Behavioral test outcomes
-    total_tests: int = 0       # behavioral tests fired (incl. adaptive follow-ups)
-    passed: int = 0            # behavioral tests where exploit did NOT succeed
-    failed: int = 0            # behavioral tests where exploit DID succeed
-    # Static analysis outcomes
-    static_findings: int = 0   # static checks that flagged an issue
-    # Severity breakdown across ALL non-passing findings (both phases)
+    total_tests: int = 0          # behavioral tests fired (incl. adaptive follow-ups)
+    passed: int = 0               # behavioral tests where exploit did NOT succeed
+    failed: int = 0               # behavioral tests where exploit DID succeed
+    # Static + conformance counts
+    static_findings: int = 0      # static failures
+    conformance_findings: int = 0 # A2A spec violations
+    # Severity breakdown across ALL non-passing findings (every phase)
     critical: int = 0
     high: int = 0
     medium: int = 0
