@@ -1,7 +1,7 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, Target, Layers, ShieldAlert, Copy, Check, ExternalLink } from 'lucide-react'
+import { ChevronDown, Target, Layers, ShieldAlert, ExternalLink } from 'lucide-react'
 import { useState } from 'react'
 import { Finding } from '@/lib/types'
 import { SeverityBadge } from './severity-badge'
@@ -43,19 +43,11 @@ const LEFT_BAR: Record<string, string> = {
 
 export function FindingCard({ finding, index }: FindingCardProps) {
   const [expanded, setExpanded] = useState(false)
-  const [copiedRepro, setCopiedRepro] = useState(false)
 
   const border = BORDER_COLOR[finding.severity] ?? 'border-gray-700/30'
   const bar    = LEFT_BAR[finding.severity] ?? 'bg-gray-600'
 
   const highlight = finding.evidence?.highlight ?? finding.evidence?.smoking_gun
-
-  const copyReproducer = () => {
-    if (!finding.reproducer) return
-    navigator.clipboard.writeText(finding.reproducer)
-    setCopiedRepro(true)
-    setTimeout(() => setCopiedRepro(false), 1800)
-  }
 
   return (
     <motion.div
@@ -185,33 +177,8 @@ export function FindingCard({ finding, index }: FindingCardProps) {
                   </div>
                 )}
 
-                {finding.reproducer && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="text-xs font-semibold text-emerald-300/80">Reproducer</div>
-                      <button
-                        onClick={copyReproducer}
-                        className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-900/40 border border-emerald-700/40 text-emerald-300 hover:bg-emerald-900/60 transition-colors"
-                        title="Copy curl command"
-                      >
-                        {copiedRepro ? (
-                          <>
-                            <Check className="w-3 h-3" />
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3 h-3" />
-                            Copy curl
-                          </>
-                        )}
-                      </button>
-                    </div>
-                    <div className="bg-emerald-950/30 border border-emerald-700/20 rounded p-2 text-[11px] text-emerald-100/80 font-mono leading-relaxed overflow-auto max-h-32 whitespace-pre-wrap break-all">
-                      {finding.reproducer}
-                    </div>
-                  </div>
-                )}
+                {/* Reproducer hidden for the demo — backend still attaches `finding.reproducer`,
+                    judges can grab it from the raw JSON if needed. */}
               </div>
             </motion.div>
           )}

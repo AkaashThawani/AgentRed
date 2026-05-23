@@ -232,7 +232,7 @@ export function ReportHero({ report, onDownload, onCopy, copied }: ReportHeroPro
             onClick={onCopy}
             size="sm"
             variant="outline"
-            className="border-slate-700/40 hover:bg-slate-800/20 text-xs h-7 px-3"
+            className="border-slate-700/40 bg-slate-900/40 text-slate-300 hover:bg-slate-800 hover:text-white hover:border-slate-600 text-xs h-7 px-3"
           >
             {copied
               ? <Check className="w-3 h-3 mr-1.5 text-teal-400" />

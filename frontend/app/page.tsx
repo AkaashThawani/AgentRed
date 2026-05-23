@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Shield, Github, AlertCircle, ChevronDown, Plus, X, KeyRound, Crosshair } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { StatusPill } from '@/components/severity-badge'
 import { PhaseTimeline } from '@/components/phase-timeline'
 import { FindingCard } from '@/components/finding-card'
 import { AgentIdentityPassport } from '@/components/agent-identity-passport'
@@ -307,12 +306,7 @@ export default function ScannerPage() {
       >
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
-            >
-              <Shield className="w-6 h-6 text-slate-400" />
-            </motion.div>
+            <Shield className="w-6 h-6 text-slate-400" />
             <div>
               <h1 className="text-xl font-bold text-white">{PRODUCT_NAME}</h1>
               <p className="text-xs text-slate-300/60">Behavioral trust scanning for AI agents</p>
@@ -321,9 +315,8 @@ export default function ScannerPage() {
 
           <div className="flex items-center gap-3">
             <SponsorLinks />
-            <StatusPill status={backendStatus} />
             <a
-              href="https://github.com"
+              href="https://github.com/AkaashThawani/AgentRed"
               target="_blank"
               rel="noopener noreferrer"
               className="p-2 hover:bg-slate-800/20 rounded transition-colors"
@@ -603,7 +596,7 @@ export default function ScannerPage() {
                   onClick={resetScan}
                   size="sm"
                   variant="outline"
-                  className="border-red-700/40 text-red-300 hover:bg-red-900/20 text-xs"
+                  className="border-red-700/40 bg-red-950/30 text-red-300 hover:bg-red-900/40 hover:text-white hover:border-red-600 text-xs"
                 >
                   New Scan
                 </Button>

@@ -7,9 +7,8 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Agent Scanner - AI Agent Security Analysis',
+  title: 'AgentRed — Behavioral Trust Scanner for AI Agents',
   description: 'Behavioral trust scanning for AI agents. Verify agent authenticity, capabilities, permissions, and security before integration.',
-  generator: 'v0.app',
   icons: {
     icon: [
       {

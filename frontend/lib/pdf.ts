@@ -431,10 +431,11 @@ function draw_key_risk_summary(s: S) {
     { label: 'Medium',       value: String(st.medium),                            fg: C.medFg,  bg: C.medBg,  bd: C.medBd  },
     { label: 'Low',          value: String(st.low),                               fg: C.lowFg,  bg: C.lowBg,  bd: C.lowBd  },
     { label: 'Static Checks',value: String(st.static_findings ?? 0),              fg: C.muted,  bg: C.offWhite, bd: C.border },
+    { label: 'Conformance',  value: String(st.conformance_findings ?? 0),         fg: C.muted,  bg: C.offWhite, bd: C.border },
     { label: 'Total Tests',  value: String(st.total_tests),                       fg: C.brand,  bg: C.brandBg, bd: C.border },
     { label: 'Passed',       value: String(st.passed),                            fg: C.passFg, bg: C.passBg, bd: C.passBd },
     { label: 'Failed',       value: String(st.failed),                            fg: C.critFg, bg: C.critBg, bd: C.critBd },
-    { label: 'Duration',     value: fmt_dur(report.duration_ms ?? st.duration),   fg: C.muted,  bg: C.offWhite, bd: C.border },
+    { label: 'Duration',     value: fmt_dur(report.duration_ms),                  fg: C.muted,  bg: C.offWhite, bd: C.border },
   ]
 
   const CELL_H = 17
@@ -564,34 +565,47 @@ function draw_next_actions(s: S) {
 
 function draw_agent_identity(s: S) {
   const { doc, mg, cW, report } = s
-  const card = report.card
-  if (!card) return
+  // Backend sends the raw A2A card under `report.card`. Older code paths use a normalised
+  // flat shape (agent_name / endpoint_url / etc.). Read both so the section is populated
+  // regardless of which shape the report contains.
+  const c: any = report.card ?? {}
+  if (!c || Object.keys(c).length === 0) return
+
+  const name      = c.agent_name ?? c.name ?? report.agent_name
+  const desc      = c.description
+  const endpoint  = c.endpoint_url ?? c.url ?? c.interfaces?.find?.((i: any) => i?.type === 'json-rpc')?.url
+  const provOrg   = c.provider_organization ?? c.provider?.organization
+  const provUrl   = c.provider_url ?? c.provider?.url
+  const version   = c.version
+  const authList: string[] = c.authentication_schemes ?? c.authentication?.schemes ?? []
+  const signed    = Boolean(c.signature ?? c.agentCardSignature)
+  const skills    = c.skills ?? []
 
   need(s, 14)
   section_title(s, 'Agent Identity')
 
   const LW = 38  // label column width
-  id_row(s, 'Name',           card.agent_name ?? '—',                                        LW)
-  id_row(s, 'Description',    card.description ?? '—',                                       LW)
-  id_row(s, 'Endpoint',       card.endpoint_url ?? '—',                                      LW)
-  id_row(s, 'Provider',       card.provider_organization ?? '—',                             LW)
-  id_row(s, 'Provider URL',   card.provider_url ?? '—',                                      LW)
-  id_row(s, 'Version',        card.version ?? '—',                                           LW)
-  id_row(s, 'Authentication', card.authentication_schemes?.join(', ') || 'None declared',    LW)
-  id_row(s, 'Card Signature', card.signature ? 'Present — card is signed' : 'Absent — card is unsigned and cannot be verified', LW)
+  id_row(s, 'Name',           name ?? '—',                                                LW)
+  id_row(s, 'Description',    desc ?? '—',                                                LW)
+  id_row(s, 'Endpoint',       endpoint ?? '—',                                            LW)
+  id_row(s, 'Provider',       provOrg ?? '—',                                             LW)
+  id_row(s, 'Provider URL',   provUrl ?? '—',                                             LW)
+  id_row(s, 'Version',        version ?? '—',                                             LW)
+  id_row(s, 'Authentication', authList.length ? authList.join(', ') : 'None declared',    LW)
+  id_row(s, 'Card Signature', signed ? 'Present — card is signed' : 'Absent — card is unsigned and cannot be verified', LW)
 
   // Capabilities
-  if (card.capabilities) {
-    const caps = (
-      Object.entries(card.capabilities) as [string, boolean | undefined][]
-    ).filter(([, v]) => v).map(([k]) => k.replace(/([A-Z])/g, ' $1').trim())
+  if (c.capabilities && typeof c.capabilities === 'object') {
+    const caps = (Object.entries(c.capabilities) as [string, boolean | undefined][])
+      .filter(([, v]) => v)
+      .map(([k]) => k.replace(/([A-Z])/g, ' $1').trim())
     if (caps.length) id_row(s, 'Capabilities', caps.join(', '), LW)
   }
 
   // Skills
-  if (card.skills?.length) {
-    const skillNames = card.skills.map((sk: Skill) => sk.name).filter(Boolean).join(', ')
-    id_row(s, 'Skills', skillNames, LW)
+  if (Array.isArray(skills) && skills.length) {
+    const skillNames = skills.map((sk: any) => sk?.name).filter(Boolean).join(', ')
+    if (skillNames) id_row(s, 'Skills', skillNames, LW)
   }
 
   hline(doc, s.y, mg, cW)
@@ -602,10 +616,11 @@ function draw_detailed_finding(s: S, f: Finding) {
   const { doc, mg, cW } = s
   const p = sevPalette(f.severity)
 
-  const ev       = f.evidence ?? {}
-  const evKey    = trunc(ev.smoking_gun ?? '',  300)
-  const evReq    = trunc(ev.request    ?? '',  300)
-  const evRes    = trunc(ev.response   ?? '',  300)
+  const ev       = (f.evidence ?? {}) as any
+  // Backend uses `highlight`; older paths used `smoking_gun`. Accept both.
+  const evKey    = trunc(ev.highlight ?? ev.smoking_gun ?? '',  300)
+  const evReq    = trunc(ev.request                     ?? '',  300)
+  const evRes    = trunc(ev.response                    ?? '',  300)
 
   // Pre-calculate all line counts to estimate card height (generous buffers)
   const titleLines = doc.splitTextToSize(f.title,              cW - 12) as string[]
@@ -639,6 +654,7 @@ function draw_detailed_finding(s: S, f: Finding) {
   doc.setFontSize(7)
   tc(doc, C.muted)
   const metaParts = [f.phase, f.test_type?.replace(/_/g, ' ')].filter(Boolean)
+  if (f.owasp_llm?.id) metaParts.push(`OWASP ${f.owasp_llm.id}`)
   doc.text(metaParts.join('  ·  '), mg + 6 + bw, ly - 0.5)
   if (f.skill_targeted) {
     tc(doc, C.brand)

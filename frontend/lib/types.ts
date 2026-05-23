@@ -99,6 +99,8 @@ export interface Report {
     failed: number
     /** Findings from static (non-behavioural) analysis */
     static_findings?: number
+    /** A2A spec conformance violations (separate phase) */
+    conformance_findings?: number
     critical: number
     high: number
     medium: number
