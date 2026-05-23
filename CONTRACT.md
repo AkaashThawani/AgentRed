@@ -46,6 +46,38 @@ Final report JSON (also pushed as last SSE event). Use this if user reloads.
 ### `GET /health`
 `{ "ok": true }`
 
+### `GET /badge/{scan_id}.svg`
+Shields.io-style SVG trust badge for a completed scan. Cacheable (60s). Embed with:
+```html
+<img src="https://agentred.onrender.com/badge/<scan_id>.svg" alt="AgentRed trust badge" />
+```
+
+### `GET /leaderboard?limit=20`
+Returns the most recent completed scans, sorted by `trust_score` desc.
+```json
+{
+  "count": 3,
+  "results": [
+    { "scan_id": "...", "target_url": "...", "agent_name": "...",
+      "trust_score": 87, "grade": "CAUTION",
+      "duration_ms": 41200, "ts": "...",
+      "badge_url": "/badge/<scan_id>.svg" }
+  ]
+}
+```
+
+### `POST /scan/registry?limit=5`
+Fetches `a2aregistry.org/api/agents?conformance=standard`, kicks off `limit` scans in parallel.
+Returns the list of queued scans so the UI can subscribe to each `stream_url`.
+```json
+{
+  "queued": 5,
+  "scans": [
+    { "scan_id": "...", "stream_url": "/stream/<id>", "target_url": "...", "name": "..." }
+  ]
+}
+```
+
 ---
 
 ## Event Types

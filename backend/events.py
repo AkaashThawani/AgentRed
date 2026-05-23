@@ -58,3 +58,8 @@ def save_report(scan_id: str, report: dict[str, Any]) -> None:
 
 def get_report(scan_id: str) -> dict[str, Any] | None:
     return _reports.get(scan_id)
+
+
+def list_reports() -> list[dict[str, Any]]:
+    """All cached final reports (process lifetime). Order: insertion-order from dict."""
+    return list(_reports.values())
