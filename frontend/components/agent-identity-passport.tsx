@@ -130,8 +130,16 @@ export function AgentIdentityPassport({ agentCard, loading }: AgentIdentityPassp
       )}
 
       {/* Raw JSON viewer */}
-      <button
+      <div
         onClick={() => setExpanded(!expanded)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            setExpanded(!expanded)
+          }
+        }}
+        role="button"
+        tabIndex={0}
         className="flex items-center gap-2 w-full p-2 hover:bg-purple-900/10 rounded transition-colors border border-purple-700/20"
       >
         <ChevronDown
@@ -148,7 +156,7 @@ export function AgentIdentityPassport({ agentCard, loading }: AgentIdentityPassp
         >
           {copied ? <Check className="w-4 h-4 text-teal-400" /> : <Copy className="w-4 h-4 text-purple-300" />}
         </button>
-      </button>
+      </div>
 
       {expanded && (
         <motion.div
