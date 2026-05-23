@@ -4,7 +4,6 @@ import { motion } from 'framer-motion'
 import {
   Download,
   Copy,
-  RotateCcw,
   Check,
   ShieldCheck,
   ShieldAlert,
@@ -16,7 +15,6 @@ import { Report } from '@/lib/types'
 
 interface ReportHeroProps {
   report: Report
-  onReset: () => void
   onDownload: () => void
   onCopy: () => void
   copied: boolean
@@ -61,7 +59,7 @@ const GRADE_CFG = {
   },
 }
 
-export function ReportHero({ report, onReset, onDownload, onCopy, copied }: ReportHeroProps) {
+export function ReportHero({ report, onDownload, onCopy, copied }: ReportHeroProps) {
   const cfg = GRADE_CFG[report.grade]
   const GradeIcon = cfg.Icon
   const r = 44
@@ -74,7 +72,6 @@ export function ReportHero({ report, onReset, onDownload, onCopy, copied }: Repo
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
       className={`mb-5 rounded-2xl border ${cfg.borderClass} overflow-hidden`}
-      style={{ boxShadow: `0 0 40px ${cfg.glowColor}, 0 0 80px ${cfg.glowColor.replace('0.35', '0.12')}` }}
     >
       {/* Main band */}
       <div className="bg-black/60 backdrop-blur-xl px-5 py-5">
@@ -94,7 +91,6 @@ export function ReportHero({ report, onReset, onDownload, onCopy, copied }: Repo
                 initial={{ strokeDashoffset: circ }}
                 animate={{ strokeDashoffset: circ - dash }}
                 transition={{ duration: 1.8, ease: 'easeOut', delay: 0.2 }}
-                style={{ filter: `drop-shadow(0 0 5px ${cfg.arcColor})` }}
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -229,15 +225,6 @@ export function ReportHero({ report, onReset, onDownload, onCopy, copied }: Repo
               ? <Check className="w-3 h-3 mr-1.5 text-teal-400" />
               : <Copy className="w-3 h-3 mr-1.5" />}
             {copied ? 'Copied!' : 'Copy'}
-          </Button>
-          <Button
-            onClick={onReset}
-            size="sm"
-            variant="outline"
-            className="border-purple-700/40 hover:bg-purple-900/20 text-xs h-7 px-3"
-          >
-            <RotateCcw className="w-3 h-3 mr-1.5" />
-            New Scan
           </Button>
         </div>
       </div>

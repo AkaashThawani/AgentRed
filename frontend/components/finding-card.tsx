@@ -19,13 +19,6 @@ const BORDER_COLOR: Record<string, string> = {
   PASSED:   'border-teal-600/30',
 }
 
-const GLOW: Record<string, string> = {
-  CRITICAL: 'shadow-[0_0_20px_rgba(220,38,38,0.25)]',
-  HIGH:     'shadow-[0_0_16px_rgba(234,88,12,0.18)]',
-  MEDIUM:   'shadow-[0_0_12px_rgba(217,119,6,0.12)]',
-  LOW:      '',
-  PASSED:   '',
-}
 
 const LEFT_BAR: Record<string, string> = {
   CRITICAL: 'bg-red-500',
@@ -39,7 +32,6 @@ export function FindingCard({ finding, index }: FindingCardProps) {
   const [expanded, setExpanded] = useState(false)
 
   const border = BORDER_COLOR[finding.severity] ?? 'border-gray-700/30'
-  const glow   = GLOW[finding.severity] ?? ''
   const bar    = LEFT_BAR[finding.severity] ?? 'bg-gray-600'
 
   return (
@@ -47,7 +39,7 @@ export function FindingCard({ finding, index }: FindingCardProps) {
       initial={{ opacity: 0, x: 12 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: Math.min(index * 0.08, 0.4) }}
-      className={`relative rounded-xl border bg-black/50 backdrop-blur-sm overflow-hidden transition-shadow ${border} ${glow}`}
+      className={`relative rounded-xl border bg-black/50 backdrop-blur-sm overflow-hidden ${border}`}
     >
       {/* Severity accent bar */}
       <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${bar}`} />

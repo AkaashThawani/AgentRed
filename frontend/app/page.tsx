@@ -15,7 +15,8 @@ import { ScanCommandBar } from '@/components/scan-command-bar'
 import { ScanOverviewCard } from '@/components/scan-overview-card'
 import { ReportHero } from '@/components/report-hero'
 import { TestLabPanel } from '@/components/test-lab-panel'
-import { checkHealth, startScan, openScanStream, downloadReportJson, copyReportSummary } from '@/lib/api'
+import { checkHealth, startScan, openScanStream, copyReportSummary } from '@/lib/api'
+import { downloadReportPdf } from '@/lib/pdf'
 import { generateMockEvents } from '@/lib/mock-data'
 import {
   ScanEvent,
@@ -580,8 +581,7 @@ export default function ScannerPage() {
             {report && (
               <ReportHero
                 report={report}
-                onReset={resetScan}
-                onDownload={() => downloadReportJson(report)}
+                onDownload={() => downloadReportPdf(report)}
                 onCopy={handleCopySummary}
                 copied={copied}
               />
