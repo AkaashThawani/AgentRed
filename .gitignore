@@ -4,6 +4,7 @@ __pycache__/
 venv/
 .env
 .env.local
+.env.local.example
 *.log
 .DS_Store
 node_modules/
