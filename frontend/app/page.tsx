@@ -131,13 +131,32 @@ export default function ScannerPage() {
       setCurrentPhase(data.phase)
       setPhaseMessage(data.message ?? '')
     } else if (type === 'finding') {
-      setFindings((prev) => [...prev, data.finding])
+      const f = data.finding
+      setFindings((prev) => [...prev, f])
+      // Mark the matching test as completed. We match by test_type + skill_targeted,
+      // taking the first running test that matches (backend doesn't echo test_id on findings).
+      if (f.phase === 'behavioral' && f.test_type) {
+        setTests((prev) => {
+          const idx = prev.findIndex(
+            (t) =>
+              t.status === 'running' &&
+              t.test_type === f.test_type &&
+              (t.skill_targeted ?? null) === (f.skill_targeted ?? null)
+          )
+          if (idx === -1) return prev
+          const next = prev.slice()
+          next[idx] = { ...next[idx], status: 'completed' as const }
+          return next
+        })
+      }
     } else if (type === 'test_generated') {
-      setTests((prev) => [...prev, data.test])
+      // Backend's TestCase uses `id` (not `test_id`) and has no `status` field.
+      // Initialize it client-side so the test-lab panel can render lifecycle.
+      setTests((prev) => [...prev, { ...data.test, status: 'generated' as const }])
     } else if (type === 'test_running') {
       setTests((prev) =>
         prev.map((t) =>
-          t.test_id === data.test_id ? { ...t, status: 'running' as const } : t
+          (t.id ?? t.test_id) === data.test_id ? { ...t, status: 'running' as const } : t
         )
       )
     } else if (type === 'adaptive_followup') {
@@ -149,6 +168,12 @@ export default function ScannerPage() {
       setReport(data.report)
       setCurrentPhase('report')
       setScanning(false)
+      // Belt-and-suspenders: any tests still flagged as running/generated when the
+      // scan finishes are guaranteed-done. Force them to 'completed' so the Test Lab
+      // panel doesn't permanently show a phantom "N running" count.
+      setTests((prev) =>
+        prev.map((t) => (t.status === 'completed' ? t : { ...t, status: 'completed' as const }))
+      )
       if (eventSourceRef.current) {
         eventSourceRef.current.close()
         eventSourceRef.current = null

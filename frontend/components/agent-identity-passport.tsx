@@ -171,9 +171,9 @@ export function AgentIdentityPassport({ agentCard, loading }: AgentIdentityPassp
             Skills
           </label>
           <div className="space-y-2">
-            {agentCard.skills.map((skill) => (
+            {agentCard.skills.map((skill, idx) => (
               <motion.div
-                key={skill.skill_id}
+                key={skill.id ?? skill.skill_id ?? `skill-${idx}`}
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 className="bg-purple-900/10 border border-purple-700/30 rounded p-2"

@@ -230,7 +230,7 @@ export function* generateMockEvents(): Generator<ScanEvent> {
 
   yield {
     type: 'test_running',
-    test_id: mockTests[0].test_id,
+    test_id: mockTests[0].test_id!,
     timestamp: Date.now() + 2100,
   }
 
@@ -256,7 +256,7 @@ export function* generateMockEvents(): Generator<ScanEvent> {
 
   yield {
     type: 'test_running',
-    test_id: mockTests[2].test_id,
+    test_id: mockTests[2].test_id!,
     timestamp: Date.now() + 3300,
   }
 

@@ -1,10 +1,17 @@
 export type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'PASSED'
 
 export interface Skill {
-  skill_id: string
+  /** A2A spec field. Backend forwards as-is. */
+  id?: string
+  /** Legacy alias — kept so older UI code still compiles. */
+  skill_id?: string
   name: string
   description?: string
   tags?: string[]
+  examples?: string[]
+  inputModes?: string[]
+  outputModes?: string[]
+  /** Legacy snake_case aliases */
   input_modes?: string[]
   output_modes?: string[]
 }
@@ -49,13 +56,19 @@ export interface Finding {
 }
 
 export interface TestCase {
-  test_id: string
+  /** Backend's canonical field per CONTRACT.md. Optional only because legacy mock-data uses test_id. */
+  id?: string
+  /** Legacy alias — older UI components and mock-data reference this */
+  test_id?: string
   test_type: string
+  payload?: string
+  /** Legacy alias */
   payload_preview?: string
   what_to_watch?: string
   severity_if_triggered?: Severity
   skill_targeted?: string
-  status: 'generated' | 'running' | 'completed'
+  /** Client-side lifecycle (set by event handlers, not from backend) */
+  status?: 'generated' | 'running' | 'completed'
 }
 
 export interface Report {

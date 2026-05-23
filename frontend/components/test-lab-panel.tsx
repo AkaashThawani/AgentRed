@@ -12,7 +12,7 @@ const SEVERITY_COLOR: Record<Severity, string> = {
   PASSED:   'text-teal-400',
 }
 
-const STATUS_DOT: Record<TestCase['status'], { bg: string; pulse: boolean; label: string }> = {
+const STATUS_DOT: Record<NonNullable<TestCase['status']>, { bg: string; pulse: boolean; label: string }> = {
   generated: { bg: 'bg-purple-500',  pulse: false, label: 'Queued'  },
   running:   { bg: 'bg-yellow-400',  pulse: true,  label: 'Running' },
   completed: { bg: 'bg-teal-500',    pulse: false, label: 'Done'    },
@@ -52,10 +52,10 @@ export function TestLabPanel({ tests }: TestLabPanelProps) {
       {/* Test rows */}
       <div className="max-h-52 overflow-y-auto divide-y divide-white/[0.04]">
         {tests.map((test, idx) => {
-          const sc = STATUS_DOT[test.status]
+          const sc = STATUS_DOT[test.status ?? 'generated']
           return (
             <motion.div
-              key={test.test_id}
+              key={test.id ?? test.test_id ?? `test-${idx}`}
               initial={{ opacity: 0, x: -6 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: Math.min(idx * 0.04, 0.3) }}
